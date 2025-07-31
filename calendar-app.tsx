@@ -816,9 +816,509 @@ export default function Component() {
                       <div className="bg-gray-50 p-8 rounded-lg border-2 border-dashed border-gray-300 text-center hover:border-gray-400 transition-colors">
                         <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                         <p className="text-lg font-medium text-gray-900 mb-2">Upload research documents</p>
+                        <p className="text-gray-600 mb-4">Drag and drop files here, or click to browse</p>
+                        <p className="text-sm text-gray-500 mb-4">Accepted formats: PDF, DOCX, TXT</p>
+                        <Button className="bg-pink-500 hover:bg-pink-600 text-white rounded-lg">Choose Files</Button>
+                      </div>
+                    </div>
+
+                    {/* File List */}
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-700 mb-3">Uploaded Files</h4>
+                      <div className="space-y-3">
+                        {/* Sample uploaded files */}
+                        <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-red-100 rounded flex items-center justify-center">
+                              <span className="text-xs font-medium text-red-600">PDF</span>
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium text-gray-900">Market Research Q3 2024.pdf</p>
+                              <p className="text-xs text-gray-500">Uploaded 2 days ago</p>
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button variant="outline" size="sm" className="rounded-lg text-xs bg-transparent">
+                              Replace
+                            </Button>
+                            <Button variant="outline" size="sm" className="rounded-lg text-xs bg-transparent">
+                              Update
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="rounded-lg text-xs bg-transparent text-red-600 border-red-200 hover:bg-red-50"
+                            >
+                              Delete
+                            </Button>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-blue-100 rounded flex items-center justify-center">
+                              <span className="text-xs font-medium text-blue-600">DOC</span>
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium text-gray-900">Competitor Analysis.docx</p>
+                              <p className="text-xs text-gray-500">Uploaded 1 week ago</p>
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button variant="outline" size="sm" className="rounded-lg text-xs bg-transparent">
+                              Replace
+                            </Button>
+                            <Button variant="outline" size="sm" className="rounded-lg text-xs bg-transparent">
+                              Update
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="rounded-lg text-xs bg-transparent text-red-600 border-red-200 hover:bg-red-50"
+                            >
+                              Delete
+                            </Button>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
+                </div>
+
+                {/* Product Library Uploads Section */}
+                <div className="mb-8">
+                  <h3 className="text-lg font-medium text-gray-900 mb-4">📦 Product Library Uploads</h3>
+
+                  <div className="bg-white rounded-lg border border-gray-200 p-6">
+                    {/* Upload Area */}
+                    <div className="mb-6">
+                      <div className="bg-gray-50 p-8 rounded-lg border-2 border-dashed border-gray-300 text-center hover:border-gray-400 transition-colors">
+                        <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                        <p className="text-lg font-medium text-gray-900 mb-2">Upload product documents</p>
+                        <p className="text-gray-600 mb-4">Drag and drop files here, or click to browse</p>
+                        <p className="text-sm text-gray-500 mb-4">Accepted formats: PDF, DOCX, CSV, XLSX</p>
+                        <Button className="bg-pink-500 hover:bg-pink-600 text-white rounded-lg">Choose Files</Button>
+                      </div>
+                    </div>
+
+                    {/* File List */}
+                    <div>
+                      <h4 className="text-sm font-medium text-gray-700 mb-3">Uploaded Files</h4>
+                      <div className="space-y-3">
+                        {/* Sample uploaded files */}
+                        <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-green-100 rounded flex items-center justify-center">
+                              <span className="text-xs font-medium text-green-600">CSV</span>
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium text-gray-900">Product Catalog Summer 2024.csv</p>
+                              <p className="text-xs text-gray-500">Uploaded 3 days ago</p>
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button variant="outline" size="sm" className="rounded-lg text-xs bg-transparent">
+                              Replace
+                            </Button>
+                            <Button variant="outline" size="sm" className="rounded-lg text-xs bg-transparent">
+                              Update
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="rounded-lg text-xs bg-transparent text-red-600 border-red-200 hover:bg-red-50"
+                            >
+                              Delete
+                            </Button>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-purple-100 rounded flex items-center justify-center">
+                              <span className="text-xs font-medium text-purple-600">XLS</span>
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium text-gray-900">Inventory Management.xlsx</p>
+                              <p className="text-xs text-gray-500">Uploaded 5 days ago</p>
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button variant="outline" size="sm" className="rounded-lg text-xs bg-transparent">
+                              Replace
+                            </Button>
+                            <Button variant="outline" size="sm" className="rounded-lg text-xs bg-transparent">
+                              Update
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="rounded-lg text-xs bg-transparent text-red-600 border-red-200 hover:bg-red-50"
+                            >
+                              Delete
+                            </Button>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-red-100 rounded flex items-center justify-center">
+                              <span className="text-xs font-medium text-red-600">PDF</span>
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium text-gray-900">Product Specifications.pdf</p>
+                              <p className="text-xs text-gray-500">Uploaded 1 week ago</p>
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button variant="outline" size="sm" className="rounded-lg text-xs bg-transparent">
+                              Replace
+                            </Button>
+                            <Button variant="outline" size="sm" className="rounded-lg text-xs bg-transparent">
+                              Update
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="rounded-lg text-xs bg-transparent text-red-600 border-red-200 hover:bg-red-50"
+                            >
+                              Delete
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Campaign Creation Modal */}
+          {showCampaignModal && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+                <div className="p-6">
+                  <div className="flex items-center justify-between mb-6">
+                    <h3 className="text-xl font-semibold text-gray-900">
+                      {existingCampaigns.find((c) => c.date === campaignForm.date) ? "Edit Campaign" : "New Campaign"}
+                    </h3>
+                    <button
+                      onClick={() => setShowCampaignModal(false)}
+                      className="text-gray-400 hover:text-gray-600 transition-colors"
+                    >
+                      <X className="w-6 h-6" />
+                    </button>
+                  </div>
+
+                  <div className="space-y-6">
+                    {/* Campaign Name */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Campaign Name</label>
+                      <input
+                        type="text"
+                        value={campaignForm.name}
+                        onChange={(e) => setCampaignForm((prev) => ({ ...prev, name: e.target.value }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+                        placeholder="Enter campaign name"
+                      />
+                    </div>
+
+                    {/* Campaign Details */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Campaign Details</label>
+                      <textarea
+                        value={campaignForm.details}
+                        onChange={(e) => setCampaignForm((prev) => ({ ...prev, details: e.target.value }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+                        rows={3}
+                        placeholder="Describe the purpose or details of this campaign"
+                      />
+                    </div>
+
+                    {/* Region */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Region</label>
+                      <Select
+                        value={campaignForm.region}
+                        onValueChange={(value) => setCampaignForm((prev) => ({ ...prev, region: value }))}
+                      >
+                        <SelectTrigger className="w-full rounded-lg">
+                          <SelectValue placeholder="Select region" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="US">US</SelectItem>
+                          <SelectItem value="UK">UK</SelectItem>
+                          <SelectItem value="Netherlands">Netherlands</SelectItem>
+                          <SelectItem value="Spain">Spain</SelectItem>
+                          <SelectItem value="France">France</SelectItem>
+                          <SelectItem value="Germany">Germany</SelectItem>
+                          <SelectItem value="Italy">Italy</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Products */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Products {campaignForm.products.length > 0 && `(${campaignForm.products.length}/3)`}
+                      </label>
+
+                      {/* Selected Products Tags */}
+                      {campaignForm.products.length > 0 && (
+                        <div className="flex flex-wrap gap-2 mb-3">
+                          {campaignForm.products.map((product) => (
+                            <div
+                              key={product}
+                              className="flex items-center gap-1 bg-pink-100 text-pink-800 px-2 py-1 rounded-full text-sm"
+                            >
+                              <span>{product}</span>
+                              <button
+                                onClick={() => removeProduct(product)}
+                                className="hover:bg-pink-200 rounded-full p-0.5 transition-colors"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Product Input with Autocomplete */}
+                      {campaignForm.products.length < 3 && (
+                        <div className="relative">
+                          <input
+                            type="text"
+                            value={productInput}
+                            onChange={(e) => {
+                              setProductInput(e.target.value)
+                              setShowProductSuggestions(e.target.value.length > 0)
+                            }}
+                            onFocus={() => setShowProductSuggestions(productInput.length > 0)}
+                            onBlur={() => setTimeout(() => setShowProductSuggestions(false), 200)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+                            placeholder="Type to search products..."
+                          />
+
+                          {/* Autocomplete Suggestions */}
+                          {showProductSuggestions && getFilteredProducts().length > 0 && (
+                            <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-40 overflow-y-auto">
+                              {getFilteredProducts().map((product) => (
+                                <button
+                                  key={product}
+                                  onClick={() => addProduct(product)}
+                                  className="w-full px-3 py-2 text-left hover:bg-gray-50 transition-colors first:rounded-t-lg last:rounded-b-lg"
+                                >
+                                  {product}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {campaignForm.products.length >= 3 && (
+                        <p className="text-xs text-gray-500 mt-1">Maximum 3 products selected</p>
+                      )}
+                    </div>
+
+                    {/* Campaign Date */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Campaign Date</label>
+                      <input
+                        type="date"
+                        value={campaignForm.date}
+                        onChange={(e) => setCampaignForm((prev) => ({ ...prev, date: e.target.value }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+                      />
+                    </div>
+
+                    {/* Trigger Timing */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Trigger Timing</label>
+                      <Select
+                        value={campaignForm.triggerTiming}
+                        onValueChange={(value) => setCampaignForm((prev) => ({ ...prev, triggerTiming: value }))}
+                      >
+                        <SelectTrigger className="w-48 rounded-lg">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="2-days">2 days before</SelectItem>
+                          <SelectItem value="3-days">3 days before</SelectItem>
+                          <SelectItem value="1-week">1 week before</SelectItem>
+                          <SelectItem value="2-weeks">2 weeks before</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Styles */}
+                    <div>
+                      <div className="flex items-center gap-2 mb-3">
+                        <label className="text-sm font-medium text-gray-700">Styles</label>
+                        <div className="group relative">
+                          <svg
+                            className="w-4 h-4 text-gray-400 cursor-help"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                          >
+                            <circle cx="12" cy="12" r="10" />
+                            <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+                            <path d="M12 17h.01" />
+                          </svg>
+                          <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 text-xs text-white bg-gray-900 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+                            Select one or more
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap gap-2 mb-3">
+                        {[
+                          "Lifestyle no subject",
+                          "Lifestyle + Subject",
+                          "Emotionally driven",
+                          "Studio Style",
+                          "Close-up shot",
+                          "White background",
+                        ].map((style) => (
+                          <button
+                            key={style}
+                            onClick={() => {
+                              setCampaignForm((prev) => ({
+                                ...prev,
+                                styles: prev.styles.includes(style)
+                                  ? prev.styles.filter((s) => s !== style)
+                                  : [...prev.styles, style],
+                              }))
+                            }}
+                            className={`px-3 py-1.5 text-sm rounded-full border transition-colors ${
+                              campaignForm.styles.includes(style)
+                                ? "bg-pink-500 text-white border-pink-500"
+                                : "border-gray-300 hover:border-pink-300 hover:bg-pink-50"
+                            }`}
+                          >
+                            {style}
+                          </button>
+                        ))}
+                      </div>
+
+                      <p className="text-xs text-gray-500">Generating multiple styles increases processing time</p>
+                    </div>
+
+                    {/* Number of Variations */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Number of Variations</label>
+                      <Select
+                        value={campaignForm.variations.toString()}
+                        onValueChange={(value) =>
+                          setCampaignForm((prev) => ({ ...prev, variations: Number.parseInt(value) }))
+                        }
+                      >
+                        <SelectTrigger className="w-24 rounded-lg">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="1">1</SelectItem>
+                          <SelectItem value="2">2</SelectItem>
+                          <SelectItem value="3">3</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  {/* Modal Actions */}
+                  <div className="flex gap-3 mt-8 pt-6 border-t border-gray-200">
+                    <Button
+                      className="flex-1 bg-pink-500 hover:bg-pink-600 text-white rounded-lg"
+                      onClick={() => {
+                        const isEditing = existingCampaigns.find((c) => c.date === campaignForm.date)
+                        console.log(isEditing ? "Updating campaign:" : "Creating campaign:", campaignForm)
+                        setShowCampaignModal(false)
+                        // Reset form
+                        setCampaignForm({
+                          name: "",
+                          details: "",
+                          region: "",
+                          products: [],
+                          date: "",
+                          generationMode: "auto",
+                          triggerTiming: "2-days",
+                          styles: [],
+                          variations: 1,
+                          saveDestination: "library",
+                        })
+                        setProductInput("")
+                        setShowProductSuggestions(false)
+                      }}
+                      disabled={!campaignForm.name || !campaignForm.date}
+                    >
+                      {existingCampaigns.find((c) => c.date === campaignForm.date)
+                        ? "Update Campaign"
+                        : "Create Campaign"}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      className="flex-1 rounded-lg bg-transparent"
+                      onClick={() => setShowCampaignModal(false)}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Jira Connection Modal */}
+          {showJiraModal && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+                <h3 className="text-lg font-semibold text-gray-900 mb-4">Connect to Jira</h3>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Jira URL</label>
+                    <input
+                      type="text"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+                      placeholder="https://yourcompany.atlassian.net"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                    <input
+                      type="email"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+                      placeholder="your-email@company.com"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">API Token</label>
+                    <input
+                      type="password"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+                      placeholder="Enter your API token"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-3 mt-6">
+                  <Button
+                    className="flex-1 bg-pink-500 hover:bg-pink-600 text-white rounded-lg"
+                    onClick={() => setShowJiraModal(false)}
+                  >
+                    Connect
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="flex-1 rounded-lg bg-transparent"
+                    onClick={() => setShowJiraModal(false)}
+                  >
+                    Cancel
+                  </Button>
                 </div>
               </div>
             </div>
