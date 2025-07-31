@@ -34,6 +34,8 @@ export default function Component() {
   const [campaignForm, setCampaignForm] = useState({
     name: "",
     details: "",
+    region: "",
+    products: [] as string[],
     date: "",
     generationMode: "auto",
     triggerTiming: "2-days",
@@ -45,10 +47,25 @@ export default function Component() {
   const [selectedImages, setSelectedImages] = useState<string[]>([])
   const [selectedImageForPreview, setSelectedImageForPreview] = useState<any>(null)
 
+  // Add state for settings page style selection
+  const [selectedSettingsStyles, setSelectedSettingsStyles] = useState<string[]>(["Lifestyle + Subject"])
+
+  const [productInput, setProductInput] = useState("")
+  const [showProductSuggestions, setShowProductSuggestions] = useState(false)
+
   // Add sample campaign data
-  const campaigns = [
+  const existingCampaigns = [
     {
+      id: "uk-summer-sale-2024",
       name: "UK Summer Sale",
+      details: "Summer promotional campaign targeting UK market with beach and lifestyle themes",
+      region: "UK",
+      products: ["photo mug", "photo canvas"],
+      date: "2024-07-29", // This matches July 29, 2024
+      triggerTiming: "2-days",
+      styles: ["Lifestyle + Subject", "Emotionally driven"],
+      variations: 2,
+      status: "active",
       images: [
         {
           id: "1",
@@ -106,39 +123,9 @@ export default function Component() {
         },
       ],
     },
-    {
-      name: "Winter Collection",
-      images: [
-        {
-          id: "7",
-          name: "Cozy Winter Setup",
-          url: "/placeholder.svg?height=300&width=300",
-          alt: "Winter cozy scene",
-          generatedDate: "3 days ago",
-          approved: true,
-          favorite: false,
-        },
-        {
-          id: "8",
-          name: "Snow Background",
-          url: "/placeholder.svg?height=300&width=300",
-          alt: "Snow background product",
-          generatedDate: "1 week ago",
-          approved: false,
-          favorite: true,
-        },
-        {
-          id: "9",
-          name: "Holiday Theme",
-          url: "/placeholder.svg?height=300&width=300",
-          alt: "Holiday themed product",
-          generatedDate: "2 weeks ago",
-          approved: true,
-          favorite: false,
-        },
-      ],
-    },
   ]
+
+  const productLibrary = ["photo mug", "photo book", "photo canvas", "metal print", "stone slate"]
 
   const daysOfWeek = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 
@@ -163,6 +150,45 @@ export default function Component() {
     }
 
     return days
+  }
+
+  // Add navigation functions
+  const navigateToPreviousMonth = () => {
+    setCurrentDate((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))
+  }
+
+  const navigateToNextMonth = () => {
+    setCurrentDate((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))
+  }
+
+  const navigateToToday = () => {
+    const today = new Date()
+    setCurrentDate(new Date(today.getFullYear(), today.getMonth(), 1))
+  }
+
+  const addProduct = (product: string) => {
+    if (campaignForm.products.length < 3 && !campaignForm.products.includes(product)) {
+      setCampaignForm((prev) => ({
+        ...prev,
+        products: [...prev.products, product],
+      }))
+    }
+    setProductInput("")
+    setShowProductSuggestions(false)
+  }
+
+  const removeProduct = (productToRemove: string) => {
+    setCampaignForm((prev) => ({
+      ...prev,
+      products: prev.products.filter((p) => p !== productToRemove),
+    }))
+  }
+
+  const getFilteredProducts = () => {
+    return productLibrary.filter(
+      (product) =>
+        product.toLowerCase().includes(productInput.toLowerCase()) && !campaignForm.products.includes(product),
+    )
   }
 
   const calendarDays = generateCalendarDays()
@@ -200,18 +226,66 @@ export default function Component() {
   const openCampaignModal = (date?: Date) => {
     if (date) {
       setSelectedDate(date)
-      setCampaignForm((prev) => ({
-        ...prev,
-        date: date.toISOString().split("T")[0],
-      }))
+      const dateString = date.toISOString().split("T")[0]
+      console.log("Clicked date:", dateString) // Debug log
+
+      // Check if there's an existing campaign on this date
+      const existingCampaign = existingCampaigns.find((campaign) => {
+        console.log("Comparing:", campaign.date, "with", dateString) // Debug log
+        return campaign.date === dateString
+      })
+
+      console.log("Found existing campaign:", existingCampaign) // Debug log
+
+      if (existingCampaign) {
+        // Pre-fill form with existing campaign data
+        setCampaignForm({
+          name: existingCampaign.name,
+          details: existingCampaign.details,
+          region: existingCampaign.region,
+          products: [...existingCampaign.products], // Create a copy
+          date: existingCampaign.date,
+          generationMode: "auto",
+          triggerTiming: existingCampaign.triggerTiming,
+          styles: [...existingCampaign.styles], // Create a copy
+          variations: existingCampaign.variations,
+          saveDestination: "library",
+        })
+      } else {
+        // Reset form for new campaign
+        setCampaignForm({
+          name: "",
+          details: "",
+          region: "",
+          products: [],
+          date: dateString,
+          generationMode: "auto",
+          triggerTiming: "2-days",
+          styles: [],
+          variations: 1,
+          saveDestination: "library",
+        })
+      }
     } else {
       setSelectedDate(null)
-      setCampaignForm((prev) => ({
-        ...prev,
+      setCampaignForm({
+        name: "",
+        details: "",
+        region: "",
+        products: [],
         date: "",
-      }))
+        generationMode: "auto",
+        triggerTiming: "2-days",
+        styles: [],
+        variations: 1,
+        saveDestination: "library",
+      })
     }
     setShowCampaignModal(true)
+  }
+
+  const toggleSettingsStyle = (style: string) => {
+    setSelectedSettingsStyles((prev) => (prev.includes(style) ? prev.filter((s) => s !== style) : [...prev, style]))
   }
 
   return (
@@ -284,17 +358,17 @@ export default function Component() {
               <div className="bg-white px-6 py-4 border-b border-gray-200 flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   <div className="flex items-center gap-2">
-                    <Button variant="ghost" size="sm">
+                    <Button variant="ghost" size="sm" onClick={navigateToPreviousMonth}>
                       <ChevronLeft className="w-4 h-4" />
                     </Button>
                     <h3 className="text-lg font-semibold text-gray-900">
                       {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
                     </h3>
-                    <Button variant="ghost" size="sm">
+                    <Button variant="ghost" size="sm" onClick={navigateToNextMonth}>
                       <ChevronRight className="w-4 h-4" />
                     </Button>
                   </div>
-                  <Button variant="outline" size="sm">
+                  <Button variant="outline" size="sm" onClick={navigateToToday}>
                     Today
                   </Button>
                 </div>
@@ -336,7 +410,9 @@ export default function Component() {
                   {calendarDays.map((day, index) => {
                     const isCurrentMonth = day.getMonth() === currentDate.getMonth()
                     const dayNumber = day.getDate()
-                    const isEvent = dayNumber === 29 && isCurrentMonth
+                    const dateString = day.toISOString().split("T")[0]
+                    const existingCampaign = existingCampaigns.find((campaign) => campaign.date === dateString)
+                    const isEvent = existingCampaign && isCurrentMonth
 
                     return (
                       <div
@@ -348,14 +424,14 @@ export default function Component() {
                           {dayNumber}
                         </span>
 
-                        {isEvent && (
+                        {isEvent && existingCampaign && (
                           <div className="mt-1">
                             <div className="bg-gray-100 rounded p-2 text-xs">
                               <div className="flex items-center gap-1 mb-1">
                                 <div className="w-2 h-2 bg-green-500 rounded-full" />
-                                <span className="font-medium text-gray-900">UK Summer Sale</span>
+                                <span className="font-medium text-gray-900">{existingCampaign.name}</span>
                               </div>
-                              <div className="text-gray-500">2 days before</div>
+                              <div className="text-gray-500">{existingCampaign.triggerTiming.replace("-", " ")}</div>
                               <div className="text-gray-500">via Google</div>
                             </div>
                           </div>
@@ -431,7 +507,12 @@ export default function Component() {
                         ].map((style) => (
                           <button
                             key={style}
-                            className="px-3 py-1.5 text-sm rounded-full border border-gray-300 hover:border-pink-300 hover:bg-pink-50 transition-colors"
+                            onClick={() => toggleSettingsStyle(style)}
+                            className={`px-3 py-1.5 text-sm rounded-full border transition-colors ${
+                              selectedSettingsStyles.includes(style)
+                                ? "bg-pink-500 text-white border-pink-500"
+                                : "border-gray-300 hover:border-pink-300 hover:bg-pink-50"
+                            }`}
                           >
                             {style}
                           </button>
@@ -626,7 +707,7 @@ export default function Component() {
 
               {/* Image Grid Content */}
               <div className="flex-1 p-6 overflow-auto">
-                {campaigns.map((campaign) => (
+                {existingCampaigns.map((campaign) => (
                   <div key={campaign.name} className="mb-8">
                     <h3 className="text-lg font-semibold text-gray-900 mb-4">{campaign.name}</h3>
 
@@ -722,266 +803,27 @@ export default function Component() {
 
           {currentPage === "upload" && (
             <div className="p-6">
-              <h2 className="text-2xl font-semibold text-gray-900 mb-8">Upload</h2>
-              <div className="max-w-2xl">
-                <div className="bg-white p-8 rounded-lg border-2 border-dashed border-gray-300 text-center">
-                  <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-lg font-medium text-gray-900 mb-2">Upload your files</p>
-                  <p className="text-gray-600 mb-4">Drag and drop files here, or click to browse</p>
-                  <Button className="bg-pink-500 hover:bg-pink-600 text-white rounded-lg">Choose Files</Button>
+              <div className="max-w-4xl">
+                <h2 className="text-2xl font-semibold text-gray-900 mb-8">Upload</h2>
+
+                {/* Research Uploads Section */}
+                <div className="mb-8">
+                  <h3 className="text-lg font-medium text-gray-900 mb-4">📘 Research Uploads</h3>
+
+                  <div className="bg-white rounded-lg border border-gray-200 p-6">
+                    {/* Upload Area */}
+                    <div className="mb-6">
+                      <div className="bg-gray-50 p-8 rounded-lg border-2 border-dashed border-gray-300 text-center hover:border-gray-400 transition-colors">
+                        <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                        <p className="text-lg font-medium text-gray-900 mb-2">Upload research documents</p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
           )}
         </div>
-
-        {/* Campaign Creation Modal */}
-        {showCampaignModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-              <div className="p-6">
-                <div className="flex items-center justify-between mb-6">
-                  <h3 className="text-xl font-semibold text-gray-900">New Campaign</h3>
-                  <button
-                    onClick={() => setShowCampaignModal(false)}
-                    className="text-gray-400 hover:text-gray-600 transition-colors"
-                  >
-                    <X className="w-6 h-6" />
-                  </button>
-                </div>
-
-                <div className="space-y-6">
-                  {/* Campaign Name */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Campaign Name</label>
-                    <input
-                      type="text"
-                      value={campaignForm.name}
-                      onChange={(e) => setCampaignForm((prev) => ({ ...prev, name: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
-                      placeholder="Enter campaign name"
-                    />
-                  </div>
-
-                  {/* Campaign Details */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Campaign Details</label>
-                    <textarea
-                      value={campaignForm.details}
-                      onChange={(e) => setCampaignForm((prev) => ({ ...prev, details: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
-                      rows={3}
-                      placeholder="Describe the purpose or details of this campaign"
-                    />
-                  </div>
-
-                  {/* Campaign Date */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Campaign Date</label>
-                    <input
-                      type="date"
-                      value={campaignForm.date}
-                      onChange={(e) => setCampaignForm((prev) => ({ ...prev, date: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
-                    />
-                  </div>
-
-                  {/* Generation Mode */}
-                  
-
-                  {/* Trigger Timing */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Trigger Timing</label>
-                    <Select
-                      value={campaignForm.triggerTiming}
-                      onValueChange={(value) => setCampaignForm((prev) => ({ ...prev, triggerTiming: value }))}
-                    >
-                      <SelectTrigger className="w-48 rounded-lg">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="2-days">2 days before</SelectItem>
-                        <SelectItem value="3-days">3 days before</SelectItem>
-                        <SelectItem value="1-week">1 week before</SelectItem>
-                        <SelectItem value="2-weeks">2 weeks before</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {/* Styles */}
-                  <div>
-                    <div className="flex items-center gap-2 mb-3">
-                      <label className="text-sm font-medium text-gray-700">Styles</label>
-                      <div className="group relative">
-                        <svg
-                          className="w-4 h-4 text-gray-400 cursor-help"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <circle cx="12" cy="12" r="10" />
-                          <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
-                          <path d="M12 17h.01" />
-                        </svg>
-                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 text-xs text-white bg-gray-900 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-                          Select one or more
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2 mb-3">
-                      {[
-                        "Lifestyle no subject",
-                        "Lifestyle + Subject",
-                        "Emotionally driven",
-                        "Studio Style",
-                        "Close-up shot",
-                        "White background",
-                      ].map((style) => (
-                        <button
-                          key={style}
-                          onClick={() => {
-                            setCampaignForm((prev) => ({
-                              ...prev,
-                              styles: prev.styles.includes(style)
-                                ? prev.styles.filter((s) => s !== style)
-                                : [...prev.styles, style],
-                            }))
-                          }}
-                          className={`px-3 py-1.5 text-sm rounded-full border transition-colors ${
-                            campaignForm.styles.includes(style)
-                              ? "bg-pink-500 text-white border-pink-500"
-                              : "border-gray-300 hover:border-pink-300 hover:bg-pink-50"
-                          }`}
-                        >
-                          {style}
-                        </button>
-                      ))}
-                    </div>
-
-                    <p className="text-xs text-gray-500">Generating multiple styles increases processing time</p>
-                  </div>
-
-                  {/* Number of Variations */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Number of Variations</label>
-                    <div className="flex items-center gap-3">
-                      <button
-                        onClick={() =>
-                          setCampaignForm((prev) => ({ ...prev, variations: Math.max(1, prev.variations - 1) }))
-                        }
-                        className="w-8 h-8 rounded-lg border border-gray-300 flex items-center justify-center hover:bg-gray-50 transition-colors"
-                        disabled={campaignForm.variations <= 1}
-                      >
-                        -
-                      </button>
-                      <span className="w-8 text-center font-medium">{campaignForm.variations}</span>
-                      <button
-                        onClick={() =>
-                          setCampaignForm((prev) => ({ ...prev, variations: Math.min(3, prev.variations + 1) }))
-                        }
-                        className="w-8 h-8 rounded-lg border border-gray-300 flex items-center justify-center hover:bg-gray-50 transition-colors"
-                        disabled={campaignForm.variations >= 3}
-                      >
-                        +
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Save Destination */}
-                  
-                </div>
-
-                {/* Modal Actions */}
-                <div className="flex gap-3 mt-8 pt-6 border-t border-gray-200">
-                  <Button
-                    className="flex-1 bg-pink-500 hover:bg-pink-600 text-white rounded-lg"
-                    onClick={() => {
-                      // Handle campaign creation logic here
-                      console.log("Creating campaign:", campaignForm)
-                      setShowCampaignModal(false)
-                      // Reset form
-                      setCampaignForm({
-                        name: "",
-                        details: "",
-                        date: "",
-                        generationMode: "auto",
-                        triggerTiming: "2-days",
-                        styles: [],
-                        variations: 1,
-                        saveDestination: "library",
-                      })
-                    }}
-                    disabled={!campaignForm.name || !campaignForm.date}
-                  >
-                    Create Campaign
-                  </Button>
-                  <Button
-                    variant="outline"
-                    className="flex-1 rounded-lg bg-transparent"
-                    onClick={() => setShowCampaignModal(false)}
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Jira Connection Modal */}
-        {showJiraModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Connect to Jira</h3>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Jira URL</label>
-                  <input
-                    type="text"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
-                    placeholder="https://yourcompany.atlassian.net"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
-                  <input
-                    type="email"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
-                    placeholder="your-email@company.com"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">API Token</label>
-                  <input
-                    type="password"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
-                    placeholder="Enter your API token"
-                  />
-                </div>
-              </div>
-
-              <div className="flex gap-3 mt-6">
-                <Button
-                  className="flex-1 bg-pink-500 hover:bg-pink-600 text-white rounded-lg"
-                  onClick={() => setShowJiraModal(false)}
-                >
-                  Connect
-                </Button>
-                <Button
-                  variant="outline"
-                  className="flex-1 rounded-lg bg-transparent"
-                  onClick={() => setShowJiraModal(false)}
-                >
-                  Cancel
-                </Button>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   )

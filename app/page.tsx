@@ -1,7 +1,5 @@
-"use client"
-
 import Component from "../calendar-app"
 
-export default function Page() {
+export default function Home() {
   return <Component />
 }
