@@ -13,6 +13,13 @@ interface DatabaseImage {
   tags: string[] | null
   updated_at: string
   status: string
+  agent_result?: Array<{
+    style: string
+    variant: {
+      prompt: string
+      prompt_success: boolean
+    }
+  }>
   selectedImageUrl?: string
   selectedImageIndex?: number
 }
@@ -103,6 +110,24 @@ export default function DatabaseImageGrid({ isPublic = false }: DatabaseImageGri
     )
   }
 
+  // Check if any prompt generation failed
+  const hasGenerationFailed = (imageData: DatabaseImage): boolean => {
+    if (!imageData.agent_result || !Array.isArray(imageData.agent_result)) {
+      return false
+    }
+    return imageData.agent_result.some(result => !result.variant.prompt_success)
+  }
+
+  // Get error messages from failed prompts
+  const getFailedPromptMessages = (imageData: DatabaseImage): string[] => {
+    if (!imageData.agent_result || !Array.isArray(imageData.agent_result)) {
+      return []
+    }
+    return imageData.agent_result
+      .filter(result => !result.variant.prompt_success)
+      .map(result => `${result.style}: ${result.variant.prompt}`)
+  }
+
   // Initial load
   useEffect(() => {
     fetchAllTags()
@@ -138,6 +163,8 @@ export default function DatabaseImageGrid({ isPublic = false }: DatabaseImageGri
   // Render image row (one database record)
   const renderImageRow = (imageData: DatabaseImage) => {
     const imageUrls = imageData.image_urls || []
+    const generationFailed = hasGenerationFailed(imageData)
+    const failedMessages = getFailedPromptMessages(imageData)
     
     return (
       <div key={imageData.id} className="bg-white rounded-lg shadow-md overflow-hidden mb-6">
@@ -170,9 +197,31 @@ export default function DatabaseImageGrid({ isPublic = false }: DatabaseImageGri
           </div>
         </div>
 
-        {/* Images grid */}
+        {/* Content area */}
         <div className="p-4">
-          {imageUrls.length > 0 ? (
+          {generationFailed ? (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <div className="flex-shrink-0">
+                  <svg className="w-5 h-5 text-red-400" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <h4 className="text-sm font-medium text-red-800 mb-2">
+                    Image Generation Failed
+                  </h4>
+                  <div className="text-sm text-red-700 space-y-1">
+                    {failedMessages.map((message, index) => (
+                      <div key={index} className="bg-red-100 rounded px-2 py-1">
+                        {message}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : imageUrls.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {imageUrls.slice(0, 3).map((imageUrl, index) => 
                 renderImage(imageUrl, index, imageData)
