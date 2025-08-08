@@ -13,6 +13,7 @@ interface DatabaseImage {
   tags: string[] | null
   updated_at: string
   status: string
+  region: string | null
   agent_result?: Array<{
     style: string
     variant: {
@@ -36,29 +37,38 @@ export default function DatabaseImageGrid({ isPublic = false }: DatabaseImageGri
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [allTags, setAllTags] = useState<string[]>([])
   const [showAllTags, setShowAllTags] = useState(false)
+  const [sortBy, setSortBy] = useState<'date' | 'country'>('date')
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
+  const [allCountries, setAllCountries] = useState<string[]>([])
+  const [selectedCountry, setSelectedCountry] = useState<string>('')
   const supabase = createClient()
 
-  // Fetch all unique tags for filtering
+  // Fetch all unique tags and countries for filtering
   const fetchAllTags = async () => {
     try {
       const { data, error } = await supabase
         .from('test_calendar_events')
-        .select('tags')
-        .not('tags', 'is', null)
+        .select('tags, region')
         .not('image_urls', 'is', null)
 
       if (error) throw error
 
       const tags = new Set<string>()
+      const countries = new Set<string>()
+      
       data?.forEach(item => {
         if (item.tags && Array.isArray(item.tags)) {
           item.tags.forEach(tag => tags.add(tag))
         }
+        if (item.region) {
+          countries.add(item.region)
+        }
       })
 
       setAllTags(Array.from(tags).sort())
+      setAllCountries(Array.from(countries).sort())
     } catch (error) {
-      console.error('Error fetching tags:', error)
+      console.error('Error fetching tags and countries:', error)
     }
   }
 
@@ -72,7 +82,6 @@ export default function DatabaseImageGrid({ isPublic = false }: DatabaseImageGri
         .select('*')
         .not('image_urls', 'is', null)
         .not('image_urls', 'eq', '{}')
-        .order('updated_at', { ascending: false })
         .limit(50)
 
       // Apply search filter
@@ -83,6 +92,18 @@ export default function DatabaseImageGrid({ isPublic = false }: DatabaseImageGri
       // Apply tag filters
       if (selectedTags.length > 0) {
         query = query.overlaps('tags', selectedTags)
+      }
+
+      // Apply country filter
+      if (selectedCountry) {
+        query = query.eq('region', selectedCountry)
+      }
+
+      // Apply sorting
+      if (sortBy === 'date') {
+        query = query.order('updated_at', { ascending: sortOrder === 'asc' })
+      } else if (sortBy === 'country') {
+        query = query.order('region', { ascending: sortOrder === 'asc' })
       }
 
       const { data, error } = await query
@@ -110,6 +131,21 @@ export default function DatabaseImageGrid({ isPublic = false }: DatabaseImageGri
     )
   }
 
+  const handleSortChange = (newSortBy: 'date' | 'country') => {
+    if (sortBy === newSortBy) {
+      // Toggle order if same field
+      setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')
+    } else {
+      // Set new field with default order
+      setSortBy(newSortBy)
+      setSortOrder('desc')
+    }
+  }
+
+  const handleCountryChange = (country: string) => {
+    setSelectedCountry(country)
+  }
+
   // Check if any prompt generation failed
   const hasGenerationFailed = (imageData: DatabaseImage): boolean => {
     if (!imageData.agent_result || !Array.isArray(imageData.agent_result)) {
@@ -135,7 +171,7 @@ export default function DatabaseImageGrid({ isPublic = false }: DatabaseImageGri
 
   useEffect(() => {
     fetchImages()
-  }, [searchTerm, selectedTags])
+  }, [searchTerm, selectedTags, selectedCountry, sortBy, sortOrder])
 
   // Render individual image
   const renderImage = (imageUrl: string, index: number, imageData: DatabaseImage) => {
@@ -259,6 +295,53 @@ export default function DatabaseImageGrid({ isPublic = false }: DatabaseImageGri
             </svg>
           </div>
 
+          {/* Sort and Filter Controls */}
+          <div className="flex flex-wrap gap-4 items-center">
+            {/* Sort Controls */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-gray-700">Sort by:</span>
+              <button
+                onClick={() => handleSortChange('date')}
+                className={`px-3 py-1 text-xs rounded-full transition-colors ${
+                  sortBy === 'date'
+                    ? 'bg-pink-500 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                Date {sortBy === 'date' && (sortOrder === 'asc' ? '↑' : '↓')}
+              </button>
+              {/* <button
+                onClick={() => handleSortChange('country')}
+                className={`px-3 py-1 text-xs rounded-full transition-colors ${
+                  sortBy === 'country'
+                    ? 'bg-pink-500 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                Country {sortBy === 'country' && (sortOrder === 'asc' ? '↑' : '↓')}
+              </button> */}
+            </div>
+
+                         {/* Region Filter */}
+             {allCountries.length > 0 && (
+               <div className="flex items-center gap-2">
+                 <span className="text-sm font-medium text-gray-700">Region:</span>
+                 <select
+                   value={selectedCountry}
+                   onChange={(e) => handleCountryChange(e.target.value)}
+                   className="px-3 py-1 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+                 >
+                   <option value="">All Regions</option>
+                   {allCountries.map(country => (
+                     <option key={country} value={country}>
+                       {country}
+                     </option>
+                   ))}
+                 </select>
+               </div>
+             )}
+          </div>
+
           {/* Tag Filters */}
           {allTags.length > 0 && (
             <div>
@@ -319,6 +402,9 @@ export default function DatabaseImageGrid({ isPublic = false }: DatabaseImageGri
                   onClick={() => {
                     setSearchTerm('')
                     setSelectedTags([])
+                    setSelectedCountry('')
+                    setSortBy('date')
+                    setSortOrder('desc')
                   }}
                   className="text-pink-500 hover:text-pink-600 underline"
                 >

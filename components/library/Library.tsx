@@ -19,12 +19,12 @@ export default function Library({ isPublic = false }: LibraryProps) {
 
   return (
     <div className="flex-1 flex flex-col">
-      <LibraryHeader
+      {/* <LibraryHeader
         selectMode={selectMode}
         setSelectMode={setSelectMode}
         selectedImages={selectedImages}
         isPublic={isPublic}
-      />
+      /> */}
 
       {/* Use DatabaseImageGrid for both public and authenticated users */}
       <DatabaseImageGrid isPublic={isPublic} />
