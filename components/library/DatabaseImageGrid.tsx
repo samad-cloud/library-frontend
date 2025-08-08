@@ -4,25 +4,50 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/utils/supabase/client'
 import ImagePreviewModal from './ImagePreviewModal'
 
+interface AgentResultItem {
+  style: string
+  variant: {
+    prompt: string
+    Image_title: string
+    Image_description: string
+    prompt_success: boolean
+  }
+}
+
+interface ImageDatum {
+  url: string
+  model: 'gpt-image-1' | 'imagen-4.0-ultra'
+  prompt_index: number
+  image_index: number
+  filename: string
+  generated_at: string
+}
+
+interface TagDatum {
+  tags: string[]
+  prompt_index: number
+  image_index: number
+  model: 'gpt-image-1' | 'imagen-4.0-ultra'
+}
+
 interface DatabaseImage {
   id: string
   jira_id: string
   summary: string
   description: string | null
-  image_urls: string[] | null
-  tags: string[] | null
+  // legacy fields (fallback)
+  image_urls?: string[] | null
+  tags?: string[] | null
+  // new structured fields
+  image_data?: ImageDatum[] | null
+  tag_data?: TagDatum[] | null
   updated_at: string
   status: string
   region: string | null
-  agent_result?: Array<{
-    style: string
-    variant: {
-      prompt: string
-      prompt_success: boolean
-    }
-  }>
+  agent_result?: AgentResultItem[]
   selectedImageUrl?: string
   selectedImageIndex?: number
+  selectedImageMeta?: ImageDatum
 }
 
 interface DatabaseImageGridProps {
@@ -48,17 +73,20 @@ export default function DatabaseImageGrid({ isPublic = false }: DatabaseImageGri
     try {
       const { data, error } = await supabase
         .from('test_calendar_events')
-        .select('tags, region')
-        .not('image_urls', 'is', null)
+        .select('tag_data, region, image_data')
+        .not('image_data', 'is', null)
 
       if (error) throw error
 
       const tags = new Set<string>()
       const countries = new Set<string>()
       
-      data?.forEach(item => {
-        if (item.tags && Array.isArray(item.tags)) {
-          item.tags.forEach(tag => tags.add(tag))
+      data?.forEach((item: any) => {
+        // Use structured tag_data
+        if (item.tag_data && Array.isArray(item.tag_data)) {
+          item.tag_data.forEach((t: TagDatum) => {
+            t.tags?.forEach((tag: string) => tags.add(tag))
+          })
         }
         if (item.region) {
           countries.add(item.region)
@@ -72,6 +100,25 @@ export default function DatabaseImageGrid({ isPublic = false }: DatabaseImageGri
     }
   }
 
+  // Helpers
+  const getTagsForImage = (imageData: DatabaseImage, img: ImageDatum): string[] => {
+    const match = imageData.tag_data?.find(
+      t => t.prompt_index === img.prompt_index && t.image_index === img.image_index && t.model === img.model
+    )
+    return match?.tags ?? []
+  }
+
+  const getDescriptionForImage = (imageData: DatabaseImage, img: ImageDatum): string | undefined => {
+    const desc = imageData.agent_result?.[img.prompt_index]?.variant?.prompt
+    return desc
+  }
+
+  const getAgentResultForImage = (imageData: DatabaseImage, img: ImageDatum): AgentResultItem | undefined => {
+    // The first 2 items in agent_result correspond to the first 2 URLs in image_data
+    // For now, we'll use prompt_index to match, but this might need adjustment based on your data structure
+    return imageData.agent_result?.[img.prompt_index]
+  }
+
   // Fetch images with filters
   const fetchImages = async () => {
     try {
@@ -79,19 +126,13 @@ export default function DatabaseImageGrid({ isPublic = false }: DatabaseImageGri
       
       let query = supabase
         .from('test_calendar_events')
-        .select('*')
-        .not('image_urls', 'is', null)
-        .not('image_urls', 'eq', '{}')
+        .select('id,jira_id,summary,description,agent_result,image_data,tag_data,updated_at,status,region')
+        .not('image_data', 'is', null)
         .limit(50)
 
       // Apply search filter
       if (searchTerm) {
         query = query.or(`summary.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%`)
-      }
-
-      // Apply tag filters
-      if (selectedTags.length > 0) {
-        query = query.overlaps('tags', selectedTags)
       }
 
       // Apply country filter
@@ -110,7 +151,17 @@ export default function DatabaseImageGrid({ isPublic = false }: DatabaseImageGri
 
       if (error) throw error
 
-      setImages(data || [])
+      let rows = (data || []) as DatabaseImage[]
+
+      // Client-side tag filtering (since tags are now JSON-based)
+      if (selectedTags.length > 0) {
+        rows = rows.filter(row => {
+          const tagSets = row.tag_data?.map(t => t.tags).flat() ?? []
+          return selectedTags.every(tag => tagSets.includes(tag))
+        })
+      }
+
+      setImages(rows)
     } catch (error) {
       console.error('Error fetching images:', error)
     } finally {
@@ -174,19 +225,26 @@ export default function DatabaseImageGrid({ isPublic = false }: DatabaseImageGri
   }, [searchTerm, selectedTags, selectedCountry, sortBy, sortOrder])
 
   // Render individual image
-  const renderImage = (imageUrl: string, index: number, imageData: DatabaseImage) => {
+  const renderImage = (img: ImageDatum, idxKey: string, imageData: DatabaseImage) => {
+    const modelLabel = img.model === 'gpt-image-1' ? 'GPT' : 'Imagen'
     return (
       <div 
-        key={`${imageData.id}-${index}`}
+        key={idxKey}
         className="aspect-square bg-gray-100 relative overflow-hidden rounded-lg hover:shadow-lg transition-shadow cursor-pointer"
-        onClick={() => setSelectedImage({ ...imageData, selectedImageUrl: imageUrl, selectedImageIndex: index })}
+        onClick={() => {
+          console.log('Image clicked:', { url: img.url, meta: img })
+          setSelectedImage({ ...imageData, selectedImageUrl: img.url, selectedImageMeta: img })
+        }}
       >
         <img
-          src={imageUrl}
-          alt={`${imageData.summary} - Image ${index + 1}`}
+          src={img.url}
+          alt={`${imageData.summary} - ${modelLabel}`}
           className="w-full h-full object-cover"
           loading="lazy"
         />
+        <div className="absolute top-2 left-2 bg-black/70 text-white text-xs px-2 py-1 rounded">
+          {modelLabel}
+        </div>
         {imageData.status === 'completed' && (
           <div className="absolute top-2 right-2 bg-green-500 text-white text-xs px-2 py-1 rounded">
             Complete
@@ -198,7 +256,11 @@ export default function DatabaseImageGrid({ isPublic = false }: DatabaseImageGri
 
   // Render image row (one database record)
   const renderImageRow = (imageData: DatabaseImage) => {
-    const imageUrls = imageData.image_urls || []
+    // Use new structured data only (since legacy columns don't exist)
+    const imagesArr: ImageDatum[] = (imageData.image_data || [])
+      .sort((a, b) => a.prompt_index - b.prompt_index || a.model.localeCompare(b.model))
+      .slice(0, 6)
+
     const generationFailed = hasGenerationFailed(imageData)
     const failedMessages = getFailedPromptMessages(imageData)
     
@@ -210,7 +272,7 @@ export default function DatabaseImageGrid({ isPublic = false }: DatabaseImageGri
             {imageData.summary}
           </h3>
           <div className="flex flex-wrap gap-1 mb-2">
-            {imageData.tags?.slice(0, 5).map((tag, tagIndex) => (
+            {(imageData.tag_data?.flatMap(t => t.tags) || []).slice(0, 5).map((tag, tagIndex) => (
               <span 
                 key={tagIndex} 
                 className="px-2 py-1 bg-gray-100 text-xs text-gray-600 rounded hover:bg-gray-200 cursor-pointer"
@@ -222,9 +284,9 @@ export default function DatabaseImageGrid({ isPublic = false }: DatabaseImageGri
                 {tag}
               </span>
             ))}
-            {imageData.tags && imageData.tags.length > 5 && (
+            {((imageData.tag_data?.flatMap(t => t.tags) || []).length > 5) && (
               <span className="px-2 py-1 bg-gray-100 text-xs text-gray-500 rounded">
-                +{imageData.tags.length - 5}
+                +{(imageData.tag_data?.flatMap(t => t.tags) || []).length - 5}
               </span>
             )}
           </div>
@@ -257,10 +319,10 @@ export default function DatabaseImageGrid({ isPublic = false }: DatabaseImageGri
                 </div>
               </div>
             </div>
-          ) : imageUrls.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {imageUrls.slice(0, 3).map((imageUrl, index) => 
-                renderImage(imageUrl, index, imageData)
+          ) : imagesArr.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+              {imagesArr.map((img, idx) => 
+                renderImage(img, `${imageData.id}-${idx}-${img.model}`, imageData)
               )}
             </div>
           ) : (
@@ -310,36 +372,26 @@ export default function DatabaseImageGrid({ isPublic = false }: DatabaseImageGri
               >
                 Date {sortBy === 'date' && (sortOrder === 'asc' ? '↑' : '↓')}
               </button>
-              {/* <button
-                onClick={() => handleSortChange('country')}
-                className={`px-3 py-1 text-xs rounded-full transition-colors ${
-                  sortBy === 'country'
-                    ? 'bg-pink-500 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                Country {sortBy === 'country' && (sortOrder === 'asc' ? '↑' : '↓')}
-              </button> */}
             </div>
 
-                         {/* Region Filter */}
-             {allCountries.length > 0 && (
-               <div className="flex items-center gap-2">
-                 <span className="text-sm font-medium text-gray-700">Region:</span>
-                 <select
-                   value={selectedCountry}
-                   onChange={(e) => handleCountryChange(e.target.value)}
-                   className="px-3 py-1 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
-                 >
-                   <option value="">All Regions</option>
-                   {allCountries.map(country => (
-                     <option key={country} value={country}>
-                       {country}
-                     </option>
-                   ))}
-                 </select>
-               </div>
-             )}
+            {/* Region Filter */}
+            {allCountries.length > 0 && (
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-gray-700">Region:</span>
+                <select
+                  value={selectedCountry}
+                  onChange={(e) => handleCountryChange(e.target.value)}
+                  className="px-3 py-1 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+                >
+                  <option value="">All Regions</option>
+                  {allCountries.map(country => (
+                    <option key={country} value={country}>
+                      {country}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
 
           {/* Tag Filters */}
@@ -427,19 +479,24 @@ export default function DatabaseImageGrid({ isPublic = false }: DatabaseImageGri
         )}
       </div>
 
-      {/* Image Preview Modal */}
-      {selectedImage && (
-        <ImagePreviewModal
-          image={{
-            id: selectedImage.id,
-            name: selectedImage.summary,
-            url: selectedImage.selectedImageUrl || selectedImage.image_urls?.[0] || '',
-            alt: selectedImage.summary,
-            generatedDate: new Date(selectedImage.updated_at).toLocaleDateString(),
-          }}
-          onClose={() => setSelectedImage(null)}
-        />
-      )}
+                    {/* Image Preview Modal */}
+       {selectedImage && selectedImage.selectedImageUrl && selectedImage.selectedImageMeta && (
+         <ImagePreviewModal
+           image={{
+             id: selectedImage.id,
+             url: selectedImage.selectedImageUrl,
+             title: selectedImage.summary,
+             alt: selectedImage.summary,
+             generatedDate: new Date(selectedImage.selectedImageMeta.generated_at).toLocaleDateString(),
+             model: selectedImage.selectedImageMeta.model,
+             filename: selectedImage.selectedImageMeta.filename,
+             tags: getTagsForImage(selectedImage, selectedImage.selectedImageMeta),
+             description: getDescriptionForImage(selectedImage, selectedImage.selectedImageMeta),
+             agentResult: getAgentResultForImage(selectedImage, selectedImage.selectedImageMeta)
+           }}
+           onClose={() => setSelectedImage(null)}
+         />
+       )}
     </div>
   )
 } 
