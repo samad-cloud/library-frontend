@@ -5,68 +5,55 @@ import { createClient } from '@/utils/supabase/client'
 import ImagePreviewModal from './ImagePreviewModal'
 import OptimizedImage from './OptimizedImage'
 
-interface AgentResultItem {
-  style: string
-  variant: {
-    prompt: string
-    Image_title: string
-    Image_description: string
-    prompt_success: boolean
-  }
-}
-
-interface ImageDatum {
-  url: string
-  model: 'gpt-image-1' | 'imagen-4.0-preview'
-  prompt_index: number
-  image_index: number
-  filename: string
-  generated_at: string
-}
-
-interface TagDatum {
-  tags: string[]
-  prompt_index: number
-  image_index: number
-  model: 'gpt-image-1' | 'imagen-4.0-preview'
-}
-
 interface DatabaseImage {
   id: string
-  jira_id: string
-  summary: string
+  storage_url: string
+  title: string
   description: string | null
-  // legacy fields (fallback)
-  image_urls?: string[] | null
-  tags?: string[] | null
-  // new structured fields
-  image_data?: ImageDatum[] | null
-  tag_data?: TagDatum[] | null
-  updated_at: string
-  status: string
-  region: string | null
-  agent_result?: AgentResultItem[]
-  selectedImageUrl?: string
-  selectedImageIndex?: number
-  selectedImageMeta?: ImageDatum
+  tags: string[]
+  style_type: string | null
+  prompt_used: string | null
+  model_name: string
+  generation_source: 'calendar' | 'manual' | 'api' | 'csv'
+  format: string | null
+  generation_id: string | null
+  generation_metadata: any
+  manual_request_data: any
+  created_at: string
+  // Joined from image_generations
+  generation_trigger?: string
+  generation_persona?: string
+  generation_products?: any
+  generation_status?: string
+  generation_completed_at?: string
 }
 
-interface DatabaseImageGridProps {
+interface GenerationGroup {
+  generation_id: string | null
+  trigger: string
+  source: string
+  status: string
+  created_at: string
+  all_tags: string[]
+  images: DatabaseImage[]
+}
+
+interface ActualImageGridProps {
   isPublic?: boolean
 }
 
-export default function DatabaseImageGrid({ isPublic = false }: DatabaseImageGridProps) {
-  const [images, setImages] = useState<DatabaseImage[]>([])
+export default function ActualImageGrid({ isPublic = false }: ActualImageGridProps) {
+  const [generationGroups, setGenerationGroups] = useState<GenerationGroup[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedImage, setSelectedImage] = useState<DatabaseImage | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [allTags, setAllTags] = useState<string[]>([])
   const [showAllTags, setShowAllTags] = useState(false)
-  const [sortBy, setSortBy] = useState<'date' | 'country'>('date')
+  const [sortBy, setSortBy] = useState<'date' | 'source' | 'status'>('date')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
-  const [allCountries, setAllCountries] = useState<string[]>([])
-  const [selectedCountry, setSelectedCountry] = useState<string>('')
+  const [selectedSource, setSelectedSource] = useState<string>('')
+  const [selectedStatus, setSelectedStatus] = useState<string>('')
   const [imageLoadStats, setImageLoadStats] = useState<{
     totalImages: number
     loadedImages: number
@@ -77,68 +64,100 @@ export default function DatabaseImageGrid({ isPublic = false }: DatabaseImageGri
   const [currentPage, setCurrentPage] = useState(1)
   const [hasMoreData, setHasMoreData] = useState(true)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
-  const [totalImageCount, setTotalImageCount] = useState(0)
+  const [totalGroupCount, setTotalGroupCount] = useState(0)
   const [usePagination, setUsePagination] = useState(false)
   
   // Configuration
-  const IMAGES_PER_PAGE = 20
-  const INFINITE_SCROLL_LIMIT = 40 // After 40 images, switch to pagination
+  const GROUPS_PER_PAGE = 20
+  const INFINITE_SCROLL_LIMIT = 40 // After 40 groups, switch to pagination
   
   const supabase = createClient()
   const loadMoreRef = useRef<HTMLDivElement>(null)
 
-  // Fetch all unique tags and countries for filtering
-  const fetchAllTags = async () => {
+  // Fetch all unique tags and sources for filtering
+  const fetchAllFilterOptions = async () => {
     try {
       const { data, error } = await supabase
-        .from('test_calendar_events')
-        .select('tag_data, region, image_data')
-        .not('image_data', 'is', null)
+        .from('images')
+        .select('tags, generation_source')
+        .not('tags', 'is', null)
 
       if (error) throw error
 
       const tags = new Set<string>()
-      const countries = new Set<string>()
+      const sources = new Set<string>()
       
       data?.forEach((item: any) => {
-        // Use structured tag_data
-        if (item.tag_data && Array.isArray(item.tag_data)) {
-          item.tag_data.forEach((t: TagDatum) => {
-            t.tags?.forEach((tag: string) => tags.add(tag))
-          })
+        // Extract tags
+        if (item.tags && Array.isArray(item.tags)) {
+          item.tags.forEach((tag: string) => tags.add(tag))
         }
-        if (item.region) {
-          countries.add(item.region)
+        
+        // Extract sources
+        if (item.generation_source) {
+          sources.add(item.generation_source)
         }
       })
 
       setAllTags(Array.from(tags).sort())
-      setAllCountries(Array.from(countries).sort())
     } catch (error) {
-      console.error('Error fetching tags and countries:', error)
+      console.error('Error fetching filter options:', error)
     }
   }
 
-  // Helpers
-  const getTagsForImage = (imageData: DatabaseImage, img: ImageDatum): string[] => {
-    const match = imageData.tag_data?.find(
-      t => t.prompt_index === img.prompt_index && t.image_index === img.image_index && t.model === img.model
-    )
-    return match?.tags ?? []
+  // Group images by generation_id and create GenerationGroup objects
+  const groupImagesByGeneration = (images: DatabaseImage[]): GenerationGroup[] => {
+    const grouped = new Map<string, GenerationGroup>()
+    
+    images.forEach(image => {
+      const key = image.generation_id || `no-generation-${image.id}`
+      
+      if (!grouped.has(key)) {
+        // Create new group
+        const group: GenerationGroup = {
+          generation_id: image.generation_id,
+          trigger: image.generation_trigger || image.title || 'Unknown Generation',
+          source: image.generation_source,
+          status: image.generation_status || 'completed',
+          created_at: image.created_at,
+          all_tags: [],
+          images: []
+        }
+        grouped.set(key, group)
+      }
+      
+      const group = grouped.get(key)!
+      group.images.push(image)
+      
+      // Collect all tags from this generation
+      if (image.tags) {
+        image.tags.forEach(tag => {
+          if (!group.all_tags.includes(tag)) {
+            group.all_tags.push(tag)
+          }
+        })
+      }
+    })
+    
+    // Sort images within each group by style_type and creation date
+    Array.from(grouped.values()).forEach(group => {
+      group.images.sort((a, b) => {
+        // First sort by style_type
+        if (a.style_type && b.style_type && a.style_type !== b.style_type) {
+          return a.style_type.localeCompare(b.style_type)
+        }
+        // Then by creation date
+        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      })
+      
+      // Sort tags alphabetically
+      group.all_tags.sort()
+    })
+    
+    return Array.from(grouped.values())
   }
 
-  const getDescriptionForImage = (imageData: DatabaseImage, img: ImageDatum): string | undefined => {
-    const desc = imageData.agent_result?.[img.prompt_index]?.variant?.prompt
-    return desc
-  }
-
-  const getAgentResultForImage = (imageData: DatabaseImage, img: ImageDatum): AgentResultItem | undefined => {
-    // The first 2 items in agent_result correspond to the first 2 URLs in image_data
-    // For now, we'll use prompt_index to match, but this might need adjustment based on your data structure
-    return imageData.agent_result?.[img.prompt_index]
-  }
-
-  // Fetch images with filters and pagination
+  // Fetch images with filters and pagination, then group by generation
   const fetchImages = useCallback(async (page: number = 1, append: boolean = false) => {
     try {
       if (!append) {
@@ -151,48 +170,57 @@ export default function DatabaseImageGrid({ isPublic = false }: DatabaseImageGri
       }
       
       console.log('🔍 Starting image fetch...', { page, append })
-      console.log('Filters:', { searchTerm, selectedCountry, selectedTags, sortBy, sortOrder })
+      console.log('Filters:', { searchTerm, selectedSource, selectedStatus, selectedTags, sortBy, sortOrder })
       
-      // Calculate offset for pagination
-      const offset = (page - 1) * IMAGES_PER_PAGE
+      // For speed, we'll fetch larger batches and do grouping on client side
+      const batchSize = append ? GROUPS_PER_PAGE * 10 : GROUPS_PER_PAGE * 15 // Fetch more images to ensure we get enough groups
+      const offset = (page - 1) * batchSize
       
-      // First, get total count for pagination logic
-      let countQuery = supabase
-        .from('test_calendar_events')
-        .select('*', { count: 'exact', head: true })
-        .not('image_data', 'is', null)
-
-      if (searchTerm) {
-        countQuery = countQuery.or(`summary.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%`)
-      }
-      if (selectedCountry) {
-        countQuery = countQuery.eq('region', selectedCountry)
-      }
-
-      const { count } = await countQuery
-      setTotalImageCount(count || 0)
-      
+      // Main query with joins to get generation data - optimized for speed
       let query = supabase
-        .from('test_calendar_events')
-        .select('id,jira_id,summary,description,agent_result,image_data,tag_data,updated_at,status,region')
-        .not('image_data', 'is', null)
-        .range(offset, offset + IMAGES_PER_PAGE - 1)
+        .from('images')
+        .select(`
+          id,
+          storage_url,
+          title,
+          description,
+          tags,
+          style_type,
+          prompt_used,
+          model_name,
+          generation_source,
+          generation_id,
+          created_at,
+          image_generations!inner(
+            trigger,
+            status,
+            completed_at
+          )
+        `)
+        .range(offset, offset + batchSize - 1)
 
-      // Apply search filter
+      // Apply search filter - search in trigger from image_generations table
       if (searchTerm) {
-        query = query.or(`summary.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%`)
+        query = query.or(`title.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%,prompt_used.ilike.%${searchTerm}%,image_generations.trigger.ilike.%${searchTerm}%`)
       }
 
-      // Apply country filter
-      if (selectedCountry) {
-        query = query.eq('region', selectedCountry)
+      // Apply source filter
+      if (selectedSource) {
+        query = query.eq('generation_source', selectedSource)
       }
 
-      // Apply sorting
+      // Apply status filter (from image_generations)
+      if (selectedStatus) {
+        query = query.eq('image_generations.status', selectedStatus)
+      }
+
+      // Apply sorting - sort by generation creation date for grouping efficiency
       if (sortBy === 'date') {
-        query = query.order('updated_at', { ascending: sortOrder === 'asc' })
-      } else if (sortBy === 'country') {
-        query = query.order('region', { ascending: sortOrder === 'asc' })
+        query = query.order('created_at', { ascending: sortOrder === 'asc' })
+      } else if (sortBy === 'source') {
+        query = query.order('generation_source', { ascending: sortOrder === 'asc' })
+      } else if (sortBy === 'status') {
+        query = query.order('image_generations.status', { ascending: sortOrder === 'asc' })
       }
 
       console.log('📡 Executing Supabase query...')
@@ -203,40 +231,59 @@ export default function DatabaseImageGrid({ isPublic = false }: DatabaseImageGri
         throw error
       }
 
-      console.log('✅ Raw query result:', data)
-      console.log('📊 Number of records returned:', data?.length || 0)
+      console.log('✅ Raw query result:', data?.length || 0, 'images')
 
-      let rows = (data || []) as DatabaseImage[]
+      // Process the joined data to flatten the structure
+      let images = (data || []).map((item: any) => ({
+        ...item,
+        generation_trigger: item.image_generations?.trigger,
+        generation_status: item.image_generations?.status,
+        generation_completed_at: item.image_generations?.completed_at
+      })) as DatabaseImage[]
 
-      // Client-side tag filtering (since tags are now JSON-based)
+      // Client-side tag filtering (since we're using array contains)
       if (selectedTags.length > 0) {
         console.log('🏷️ Applying tag filter:', selectedTags)
-        rows = rows.filter(row => {
-          const tagSets = row.tag_data?.map(t => t.tags).flat() ?? []
-          return selectedTags.every(tag => tagSets.includes(tag))
+        images = images.filter(image => {
+          const imageTags = image.tags || []
+          return selectedTags.every(tag => imageTags.includes(tag))
         })
-        console.log('📊 After tag filtering:', rows.length)
+        console.log('📊 After tag filtering:', images.length)
       }
 
-      console.log('🎯 Final result:', rows.length, 'images')
+      // Group images by generation_id
+      const newGroups = groupImagesByGeneration(images)
+      console.log('🎯 Grouped into:', newGroups.length, 'generation groups')
       
-      // Calculate total number of images for performance tracking
-      const totalImages = rows.reduce((acc, row) => {
-        return acc + (Array.isArray(row.image_data) ? row.image_data.length : 0)
-      }, 0)
+      // Calculate total images for performance tracking
+      const totalImages = newGroups.reduce((acc, group) => acc + group.images.length, 0)
+      
+      // Sort groups by their creation date
+      newGroups.sort((a, b) => {
+        if (sortOrder === 'asc') {
+          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        } else {
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        }
+      })
+      
+      // For pagination, we need to limit the number of groups shown
+      const groupsToShow = newGroups.slice(0, GROUPS_PER_PAGE)
+      const hasMore = newGroups.length >= GROUPS_PER_PAGE
       
       // Determine if we should use pagination after this load
-      const currentTotalRecords = append ? images.length + rows.length : rows.length
-      const shouldUsePagination = currentTotalRecords >= INFINITE_SCROLL_LIMIT / IMAGES_PER_PAGE
+      const currentTotalGroups = append ? generationGroups.length + groupsToShow.length : groupsToShow.length
+      const shouldUsePagination = currentTotalGroups >= INFINITE_SCROLL_LIMIT
 
       setUsePagination(shouldUsePagination)
-      setHasMoreData((offset + IMAGES_PER_PAGE) < (count || 0) && rows.length === IMAGES_PER_PAGE)
+      setHasMoreData(hasMore && !shouldUsePagination)
+      setTotalGroupCount(newGroups.length)
       
       if (append) {
-        setImages(prev => [...prev, ...rows])
+        setGenerationGroups(prev => [...prev, ...groupsToShow])
         setCurrentPage(page)
       } else {
-        setImages(rows)
+        setGenerationGroups(groupsToShow)
         setImageLoadStats({
           totalImages,
           loadedImages: 0,
@@ -250,7 +297,7 @@ export default function DatabaseImageGrid({ isPublic = false }: DatabaseImageGri
       setLoading(false)
       setIsLoadingMore(false)
     }
-  }, [searchTerm, selectedCountry, selectedTags, sortBy, sortOrder, images.length, IMAGES_PER_PAGE, INFINITE_SCROLL_LIMIT, supabase])
+  }, [searchTerm, selectedSource, selectedStatus, selectedTags, sortBy, sortOrder, generationGroups.length, GROUPS_PER_PAGE, INFINITE_SCROLL_LIMIT, supabase])
 
   // Load more images for infinite scroll
   const loadMoreImages = useCallback(async () => {
@@ -289,7 +336,7 @@ export default function DatabaseImageGrid({ isPublic = false }: DatabaseImageGri
   }
 
   const goToNextPage = () => {
-    const totalPages = Math.ceil(totalImageCount / IMAGES_PER_PAGE)
+    const totalPages = Math.ceil(totalGroupCount / GROUPS_PER_PAGE)
     if (currentPage < totalPages) goToPage(currentPage + 1)
   }
 
@@ -306,7 +353,7 @@ export default function DatabaseImageGrid({ isPublic = false }: DatabaseImageGri
     )
   }
 
-  const handleSortChange = (newSortBy: 'date' | 'country') => {
+  const handleSortChange = (newSortBy: 'date' | 'source' | 'status') => {
     if (sortBy === newSortBy) {
       // Toggle order if same field
       setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')
@@ -317,36 +364,22 @@ export default function DatabaseImageGrid({ isPublic = false }: DatabaseImageGri
     }
   }
 
-  const handleCountryChange = (country: string) => {
-    setSelectedCountry(country)
+  const handleSourceChange = (source: string) => {
+    setSelectedSource(source)
   }
 
-  // Check if any prompt generation failed
-  const hasGenerationFailed = (imageData: DatabaseImage): boolean => {
-    if (!imageData.agent_result || !Array.isArray(imageData.agent_result)) {
-      return false
-    }
-    return imageData.agent_result.some(result => !result.variant.prompt_success)
-  }
-
-  // Get error messages from failed prompts
-  const getFailedPromptMessages = (imageData: DatabaseImage): string[] => {
-    if (!imageData.agent_result || !Array.isArray(imageData.agent_result)) {
-      return []
-    }
-    return imageData.agent_result
-      .filter(result => !result.variant.prompt_success)
-      .map(result => `${result.style}: ${result.variant.prompt}`)
+  const handleStatusChange = (status: string) => {
+    setSelectedStatus(status)
   }
 
   // Initial load
   useEffect(() => {
-    fetchAllTags()
+    fetchAllFilterOptions()
   }, [])
 
   useEffect(() => {
     fetchImages(1, false) // Reset to first page when filters change
-  }, [searchTerm, selectedTags, selectedCountry, sortBy, sortOrder])
+  }, [searchTerm, selectedTags, selectedSource, selectedStatus, sortBy, sortOrder])
 
   // Track image load performance
   const handleImageLoad = () => {
@@ -357,11 +390,6 @@ export default function DatabaseImageGrid({ isPublic = false }: DatabaseImageGri
       if (isComplete && prev.startTime) {
         const loadTime = Date.now() - prev.startTime
         console.log(`📈 Performance: ${newLoadedCount} images loaded in ${loadTime}ms (${(loadTime/newLoadedCount).toFixed(1)}ms avg per image)`)
-        
-        // Log warning if performance is poor
-        if (loadTime > 2000) {
-          console.warn(`⚠️ Slow loading detected: ${loadTime}ms for ${newLoadedCount} images`)
-        }
       }
       
       return {
@@ -371,60 +399,108 @@ export default function DatabaseImageGrid({ isPublic = false }: DatabaseImageGri
     })
   }
 
+  // Get source badge style
+  const getSourceBadgeStyle = (source: string) => {
+    switch (source) {
+      case 'csv':
+        return 'bg-blue-500 text-white'
+      case 'calendar':
+        return 'bg-green-500 text-white'
+      case 'manual':
+        return 'bg-purple-500 text-white'
+      case 'api':
+        return 'bg-orange-500 text-white'
+      default:
+        return 'bg-gray-500 text-white'
+    }
+  }
+
+  // Get model badge style
+  const getModelBadgeStyle = (model: string) => {
+    switch (model) {
+      case 'gpt-image-1':
+        return 'bg-pink-500 text-white'
+      case 'imagen-4.0-preview':
+        return 'bg-blue-500 text-white'
+      default:
+        return 'bg-gray-500 text-white'
+    }
+  }
+
+  // Check if any prompt generation failed
+  const hasGenerationFailed = (group: GenerationGroup): boolean => {
+    return group.status === 'failed'
+  }
+
   // Render individual image
-  const renderImage = (img: ImageDatum, idxKey: string, imageData: DatabaseImage) => {
-    const modelLabel = img.model === 'gpt-image-1' ? 'GPT' : 'Imagen'
+  const renderImage = (image: DatabaseImage, idxKey: string) => {
+    const modelLabel = image.model_name === 'gpt-image-1' ? 'DALL-E' : 'Imagen'
     return (
       <div 
         key={idxKey}
         className="aspect-square bg-gray-100 relative overflow-hidden rounded-lg hover:shadow-lg transition-shadow cursor-pointer"
         onClick={() => {
-          console.log('Image clicked:', { url: img.url, meta: img })
-          setSelectedImage({ ...imageData, selectedImageUrl: img.url, selectedImageMeta: img })
+          console.log('Image clicked:', image)
+          setSelectedImage(image)
         }}
       >
         <OptimizedImage
-          src={img.url}
-          alt={`${imageData.summary} - ${modelLabel}`}
-          className="w-full h-full"
+          src={image.storage_url}
+          alt={image.title}
+          className="w-full h-full object-cover"
           loading="lazy"
           onLoad={handleImageLoad}
           onError={(e) => {
-            console.error('Image failed to load:', img.url)
+            console.error('Image failed to load:', image.storage_url)
             e.currentTarget.src = '/placeholder.svg'
           }}
         />
+        
+        {/* Model badge */}
         <div className="absolute top-2 left-2 bg-black/70 text-white text-xs px-2 py-1 rounded z-10">
           {modelLabel}
         </div>
-        {imageData.status === 'completed' && (
+        
+        {/* Status badge */}
+        {image.generation_status === 'completed' && (
           <div className="absolute top-2 right-2 bg-green-500 text-white text-xs px-2 py-1 rounded z-10">
             Complete
+          </div>
+        )}
+
+        {/* Style badge (bottom) */}
+        {image.style_type && (
+          <div className="absolute bottom-2 left-2 bg-black/70 text-white text-xs px-2 py-1 rounded z-10">
+            {image.style_type}
           </div>
         )}
       </div>
     )
   }
 
-  // Render image row (one database record)
-  const renderImageRow = (imageData: DatabaseImage) => {
-    // Use new structured data only (since legacy columns don't exist)
-    const imagesArr: ImageDatum[] = (imageData.image_data || [])
-      .sort((a, b) => a.prompt_index - b.prompt_index || a.model.localeCompare(b.model))
-      .slice(0, 6)
-
-    const generationFailed = hasGenerationFailed(imageData)
-    const failedMessages = getFailedPromptMessages(imageData)
+  // Render generation group (similar to image row in DatabaseImageGrid)
+  const renderGenerationGroup = (group: GenerationGroup) => {
+    const generationFailed = hasGenerationFailed(group)
+    
+    // Limit images shown to first 6 for speed
+    const imagesToShow = group.images.slice(0, 6)
     
     return (
-      <div key={imageData.id} className="bg-white rounded-lg shadow-md overflow-hidden mb-6">
-        {/* Header with summary */}
+      <div key={group.generation_id || 'no-gen'} className="bg-white rounded-lg shadow-md overflow-hidden mb-6">
+        {/* Header with trigger and source */}
         <div className="p-4 border-b border-gray-200">
-          <h3 className="font-medium text-gray-900 mb-2 line-clamp-2">
-            {imageData.summary}
-          </h3>
+          <div className="flex items-start justify-between mb-2">
+            <h3 className="font-medium text-gray-900 flex-1 line-clamp-2">
+              {group.trigger}
+            </h3>
+            <div className={`ml-3 text-xs px-2 py-1 rounded ${getSourceBadgeStyle(group.source)}`}>
+              {group.source.toUpperCase()}
+            </div>
+          </div>
+          
+          {/* Tags */}
           <div className="flex flex-wrap gap-1 mb-2">
-            {(imageData.tag_data?.flatMap(t => t.tags) || []).slice(0, 5).map((tag, tagIndex) => (
+            {group.all_tags.slice(0, 5).map((tag, tagIndex) => (
               <span 
                 key={tagIndex} 
                 className="px-2 py-1 bg-gray-100 text-xs text-gray-600 rounded hover:bg-gray-200 cursor-pointer"
@@ -436,14 +512,19 @@ export default function DatabaseImageGrid({ isPublic = false }: DatabaseImageGri
                 {tag}
               </span>
             ))}
-            {((imageData.tag_data?.flatMap(t => t.tags) || []).length > 5) && (
+            {group.all_tags.length > 5 && (
               <span className="px-2 py-1 bg-gray-100 text-xs text-gray-500 rounded">
-                +{(imageData.tag_data?.flatMap(t => t.tags) || []).length - 5}
+                +{group.all_tags.length - 5}
               </span>
             )}
           </div>
-          <div className="text-xs text-gray-400">
-            {new Date(imageData.updated_at).toLocaleDateString()}
+          
+          {/* Date and status */}
+          <div className="flex items-center justify-between text-xs text-gray-400">
+            <span>{new Date(group.created_at).toLocaleDateString()}</span>
+            <span className={`px-2 py-1 rounded ${group.status === 'completed' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
+              {group.status}
+            </span>
           </div>
         </div>
 
@@ -461,25 +542,30 @@ export default function DatabaseImageGrid({ isPublic = false }: DatabaseImageGri
                   <h4 className="text-sm font-medium text-red-800 mb-2">
                     Image Generation Failed
                   </h4>
-                  <div className="text-sm text-red-700 space-y-1">
-                    {failedMessages.map((message, index) => (
-                      <div key={index} className="bg-red-100 rounded px-2 py-1">
-                        {message}
-                      </div>
-                    ))}
+                  <div className="text-sm text-red-700">
+                    Generation failed for trigger: {group.trigger}
                   </div>
                 </div>
               </div>
             </div>
-          ) : imagesArr.length > 0 ? (
+          ) : imagesToShow.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-              {imagesArr.map((img, idx) => 
-                renderImage(img, `${imageData.id}-${idx}-${img.model}`, imageData)
+              {imagesToShow.map((img, idx) => 
+                renderImage(img, `${group.generation_id}-${idx}`)
               )}
             </div>
           ) : (
             <div className="text-center py-8 text-gray-500">
               No images available
+            </div>
+          )}
+          
+          {/* Show "more images" indicator if there are more than 6 */}
+          {group.images.length > 6 && (
+            <div className="mt-4 text-center">
+              <span className="text-sm text-gray-500">
+                +{group.images.length - 6} more images in this generation
+              </span>
             </div>
           )}
         </div>
@@ -499,7 +585,7 @@ export default function DatabaseImageGrid({ isPublic = false }: DatabaseImageGri
           <div className="relative">
             <input
               type="text"
-              placeholder="Search by summary, description, or tags..."
+              placeholder="Search by title, description, or prompt..."
               value={searchTerm}
               onChange={(e) => handleSearchChange(e.target.value)}
               className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
@@ -524,26 +610,58 @@ export default function DatabaseImageGrid({ isPublic = false }: DatabaseImageGri
               >
                 Date {sortBy === 'date' && (sortOrder === 'asc' ? '↑' : '↓')}
               </button>
+              <button
+                onClick={() => handleSortChange('source')}
+                className={`px-3 py-1 text-xs rounded-full transition-colors ${
+                  sortBy === 'source'
+                    ? 'bg-pink-500 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                Source {sortBy === 'source' && (sortOrder === 'asc' ? '↑' : '↓')}
+              </button>
+              <button
+                onClick={() => handleSortChange('status')}
+                className={`px-3 py-1 text-xs rounded-full transition-colors ${
+                  sortBy === 'status'
+                    ? 'bg-pink-500 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                Status {sortBy === 'status' && (sortOrder === 'asc' ? '↑' : '↓')}
+              </button>
             </div>
 
-            {/* Region Filter */}
-            {allCountries.length > 0 && (
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium text-gray-700">Region:</span>
-                <select
-                  value={selectedCountry}
-                  onChange={(e) => handleCountryChange(e.target.value)}
-                  className="px-3 py-1 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
-                >
-                  <option value="">All Regions</option>
-                  {allCountries.map(country => (
-                    <option key={country} value={country}>
-                      {country}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
+            {/* Source Filter */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-gray-700">Source:</span>
+              <select
+                value={selectedSource}
+                onChange={(e) => handleSourceChange(e.target.value)}
+                className="px-3 py-1 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+              >
+                <option value="">All Sources</option>
+                <option value="csv">CSV Upload</option>
+                <option value="calendar">Calendar Events</option>
+                <option value="manual">Manual Generation</option>
+                <option value="api">API Generation</option>
+              </select>
+            </div>
+
+            {/* Status Filter */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-gray-700">Status:</span>
+              <select
+                value={selectedStatus}
+                onChange={(e) => handleStatusChange(e.target.value)}
+                className="px-3 py-1 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+              >
+                <option value="">All Status</option>
+                <option value="completed">Completed</option>
+                <option value="failed">Failed</option>
+                <option value="pending">Pending</option>
+              </select>
+            </div>
           </div>
 
           {/* Tag Filters */}
@@ -578,9 +696,9 @@ export default function DatabaseImageGrid({ isPublic = false }: DatabaseImageGri
         </div>
       </div>
 
-      {/* Image Rows */}
+      {/* Generation Groups */}
       <div className="flex-1 p-6">
-        {images.length === 0 && !loading ? (
+        {generationGroups.length === 0 && !loading ? (
           <div className="text-center py-12">
             {isPublic ? (
               <div>
@@ -606,7 +724,8 @@ export default function DatabaseImageGrid({ isPublic = false }: DatabaseImageGri
                   onClick={() => {
                     setSearchTerm('')
                     setSelectedTags([])
-                    setSelectedCountry('')
+                    setSelectedSource('')
+                    setSelectedStatus('')
                     setSortBy('date')
                     setSortOrder('desc')
                   }}
@@ -619,7 +738,7 @@ export default function DatabaseImageGrid({ isPublic = false }: DatabaseImageGri
           </div>
         ) : (
           <div className="space-y-6">
-            {images.map((imageData) => renderImageRow(imageData))}
+            {generationGroups.map((group) => renderGenerationGroup(group))}
           </div>
         )}
 
@@ -641,7 +760,7 @@ export default function DatabaseImageGrid({ isPublic = false }: DatabaseImageGri
             <div className="flex flex-col items-center gap-4">
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
                 <p className="text-sm text-blue-800 mb-2">
-                  📄 You've reached the infinite scroll limit ({INFINITE_SCROLL_LIMIT} images)
+                  📄 You've reached the infinite scroll limit ({INFINITE_SCROLL_LIMIT} generation groups)
                 </p>
                 <p className="text-xs text-blue-600">
                   Use pagination below to continue browsing
@@ -659,16 +778,16 @@ export default function DatabaseImageGrid({ isPublic = false }: DatabaseImageGri
 
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-gray-600">
-                    Page {currentPage} of {Math.ceil(totalImageCount / IMAGES_PER_PAGE)}
+                    Page {currentPage} of {Math.ceil(totalGroupCount / GROUPS_PER_PAGE)}
                   </span>
                   <span className="text-xs text-gray-400">
-                    ({totalImageCount} total images)
+                    ({totalGroupCount} total generation groups)
                   </span>
                 </div>
 
                 <button
                   onClick={goToNextPage}
-                  disabled={currentPage >= Math.ceil(totalImageCount / IMAGES_PER_PAGE)}
+                  disabled={currentPage >= Math.ceil(totalGroupCount / GROUPS_PER_PAGE)}
                   className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Next →
@@ -681,11 +800,11 @@ export default function DatabaseImageGrid({ isPublic = false }: DatabaseImageGri
                 <input
                   type="number"
                   min="1"
-                  max={Math.ceil(totalImageCount / IMAGES_PER_PAGE)}
+                  max={Math.ceil(totalGroupCount / GROUPS_PER_PAGE)}
                   value={currentPage}
                   onChange={(e) => {
                     const page = parseInt(e.target.value)
-                    if (page >= 1 && page <= Math.ceil(totalImageCount / IMAGES_PER_PAGE)) {
+                    if (page >= 1 && page <= Math.ceil(totalGroupCount / GROUPS_PER_PAGE)) {
                       goToPage(page)
                     }
                   }}
@@ -724,24 +843,35 @@ export default function DatabaseImageGrid({ isPublic = false }: DatabaseImageGri
         )}
       </div>
 
-                    {/* Image Preview Modal */}
-       {selectedImage && selectedImage.selectedImageUrl && selectedImage.selectedImageMeta && (
-         <ImagePreviewModal
-           image={{
-             id: selectedImage.id,
-             url: selectedImage.selectedImageUrl,
-             title: selectedImage.summary,
-             alt: selectedImage.summary,
-             generatedDate: new Date(selectedImage.selectedImageMeta.generated_at).toLocaleDateString(),
-             model: selectedImage.selectedImageMeta.model,
-             filename: selectedImage.selectedImageMeta.filename,
-             tags: getTagsForImage(selectedImage, selectedImage.selectedImageMeta),
-             description: getDescriptionForImage(selectedImage, selectedImage.selectedImageMeta),
-             agentResult: getAgentResultForImage(selectedImage, selectedImage.selectedImageMeta)
-           }}
-           onClose={() => setSelectedImage(null)}
-         />
-       )}
+      {/* Image Preview Modal */}
+      {selectedImage && (
+        <ImagePreviewModal
+          image={{
+            id: selectedImage.id,
+            url: selectedImage.storage_url,
+            title: selectedImage.title,
+            alt: selectedImage.title,
+            generatedDate: new Date(selectedImage.created_at).toLocaleDateString(),
+            model: selectedImage.model_name,
+            filename: selectedImage.storage_url.split('/').pop() || 'unknown',
+            tags: selectedImage.tags || [],
+            description: selectedImage.description || selectedImage.prompt_used || undefined,
+            agentResult: {
+              style: selectedImage.style_type || 'unknown',
+              variant: {
+                prompt: selectedImage.prompt_used || '',
+                Image_title: selectedImage.title,
+                Image_description: selectedImage.description || '',
+                prompt_success: selectedImage.generation_status === 'completed'
+              }
+            },
+            source: selectedImage.generation_source,
+            trigger: selectedImage.generation_trigger,
+            generationMetadata: selectedImage.generation_metadata
+          }}
+          onClose={() => setSelectedImage(null)}
+        />
+      )}
     </div>
   )
-} 
+}

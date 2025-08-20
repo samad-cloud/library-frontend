@@ -4,7 +4,7 @@ import { useState } from 'react'
 import LibraryHeader from './LibraryHeader'
 import ImageGrid from './ImageGrid'
 import ImagePreviewModal from './ImagePreviewModal'
-import DatabaseImageGrid from './DatabaseImageGrid'
+import ActualImageGrid from './ActualImageGrid'
 
 
 
@@ -26,8 +26,8 @@ export default function Library({ isPublic = false }: LibraryProps) {
         isPublic={isPublic}
       /> */}
 
-      {/* Use DatabaseImageGrid for both public and authenticated users */}
-      <DatabaseImageGrid isPublic={isPublic} />
+      {/* Use ActualImageGrid for both public and authenticated users - shows real images from images table */}
+      <ActualImageGrid isPublic={isPublic} />
     </div>
   )
 }

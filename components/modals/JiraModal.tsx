@@ -13,6 +13,9 @@ export default function JiraModal({ onClose }: JiraModalProps) {
   const [jiraUrl, setJiraUrl] = useState('')
   const [username, setUsername] = useState('')
   const [apiToken, setApiToken] = useState('')
+  const [projectName, setProjectName] = useState('')
+  const [issueType, setIssueType] = useState('')
+  const [fetchLimit, setFetchLimit] = useState(200) // Default fetch limit
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -22,8 +25,13 @@ export default function JiraModal({ onClose }: JiraModalProps) {
   const currentYear = now.getFullYear()
 
   async function handleConnect() {
-    if (!jiraUrl || !username || !apiToken) {
+    if (!jiraUrl || !username || !apiToken || !projectName || !issueType) {
       setError('All fields are required')
+      return
+    }
+
+    if (fetchLimit < 1 || fetchLimit > 1000) {
+      setError('Fetch limit must be between 1 and 1000')
       return
     }
 
@@ -40,6 +48,9 @@ export default function JiraModal({ onClose }: JiraModalProps) {
           jiraUrl: jiraUrl.trim(),
           username: username.trim(),
           apiToken: apiToken.trim(),
+          projectName: projectName.trim(),
+          issueType: issueType.trim(),
+          fetchLimit: fetchLimit,
           month: currentMonth,
           year: currentYear
         })
@@ -52,8 +63,8 @@ export default function JiraModal({ onClose }: JiraModalProps) {
       }
 
       // Show success message before closing
-      const eventsMessage = data.inserted 
-        ? `Successfully connected and imported ${data.inserted} calendar events.`
+      const eventsMessage = data.newly_inserted 
+        ? `Successfully connected and imported ${data.newly_inserted} calendar events from ${projectName}.`
         : 'Successfully connected to Jira.'
         
       // Brief delay to show success message
@@ -132,14 +143,56 @@ export default function JiraModal({ onClose }: JiraModalProps) {
               placeholder="Enter your API token"
               disabled={isLoading}
             />
-            <div className="mt-1 text-xs space-y-1">
-              <p className="text-gray-500">
-                Generate an API token from your Atlassian account settings
-              </p>
-              <p className="text-gray-500">
-                This will also import your email campaign events for the current month
-              </p>
-            </div>
+            <p className="mt-1 text-xs text-gray-500">
+              Generate an API token from your Atlassian account settings
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Project Name</label>
+            <input
+              type="text"
+              value={projectName}
+              onChange={(e) => setProjectName(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+              placeholder="e.g. EMCP"
+              disabled={isLoading}
+            />
+            <p className="mt-1 text-xs text-gray-500">
+              The Jira project key or name you want to sync events from
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Issue Type</label>
+            <input
+              type="text"
+              value={issueType}
+              onChange={(e) => setIssueType(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+              placeholder="e.g. Email"
+              disabled={isLoading}
+            />
+            <p className="mt-1 text-xs text-gray-500">
+              The type of issues to import as calendar events
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Fetch Limit</label>
+            <input
+              type="number"
+              min="1"
+              max="1000"
+              value={fetchLimit}
+              onChange={(e) => setFetchLimit(parseInt(e.target.value) || 200)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+              placeholder="200"
+              disabled={isLoading}
+            />
+            <p className="mt-1 text-xs text-gray-500">
+              Maximum number of issues to fetch per sync (1-1000, default: 200)
+            </p>
           </div>
         </div>
 

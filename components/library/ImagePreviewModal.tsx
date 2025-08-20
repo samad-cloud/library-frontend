@@ -1,6 +1,6 @@
 'use client'
 
-import { X } from 'lucide-react'
+import { X, Download, Share2, Edit3 } from 'lucide-react'
 
 interface AgentResult {
   style: string
@@ -24,6 +24,9 @@ interface ImagePreviewModalProps {
     tags?: string[]
     description?: string
     agentResult?: AgentResult
+    source?: string
+    trigger?: string
+    generationMetadata?: any
   }
   onClose: () => void
 }
@@ -32,6 +35,54 @@ export default function ImagePreviewModal({ image, onClose }: ImagePreviewModalP
   if (!image.url) {
     console.error('No image URL provided to modal')
     return null
+  }
+
+  // Download handler
+  const handleDownload = async () => {
+    try {
+      const response = await fetch(image.url)
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = image.filename || `generated-image-${image.id}.png`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error('Download failed:', error)
+    }
+  }
+
+  // Share handler
+  const handleShare = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: image.title,
+          text: `Check out this AI-generated image: ${image.title}`,
+          url: image.url
+        })
+      } catch (error) {
+        console.error('Share failed:', error)
+      }
+    } else {
+      // Fallback - copy image URL to clipboard
+      try {
+        await navigator.clipboard.writeText(image.url)
+        alert('Image URL copied to clipboard!')
+      } catch (error) {
+        console.error('Copy to clipboard failed:', error)
+      }
+    }
+  }
+
+  // Edit handler (placeholder for now)
+  const handleEdit = () => {
+    // TODO: Implement edit functionality or redirect to editor
+    console.log('Edit functionality not implemented yet')
+    alert('Edit functionality coming soon!')
   }
 
   return (
@@ -52,9 +103,9 @@ export default function ImagePreviewModal({ image, onClose }: ImagePreviewModalP
           <X className="w-5 h-5" />
         </button>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 min-h-[70vh]">
+        <div className="grid grid-cols-1 lg:grid-cols-3 h-[80vh] max-h-[80vh]">
           {/* Image display area */}
-          <div className="lg:col-span-2 bg-gray-900 flex items-center justify-center p-6">
+          <div className="lg:col-span-2 bg-gray-900 flex items-center justify-center p-6 overflow-hidden">
             <img
               src={image.url}
               alt={image.alt}
@@ -68,7 +119,8 @@ export default function ImagePreviewModal({ image, onClose }: ImagePreviewModalP
           </div>
 
           {/* Sidebar with metadata */}
-          <div className="lg:col-span-1 p-6 bg-gray-50 overflow-y-auto">
+          <div className="lg:col-span-1 bg-gray-50 flex flex-col max-h-[80vh]">
+            <div className="p-6 overflow-y-auto flex-1">
             <div className="space-y-4">
               {/* Title */}
               <div>
@@ -164,6 +216,38 @@ export default function ImagePreviewModal({ image, onClose }: ImagePreviewModalP
                   <p className="text-sm text-gray-700 whitespace-pre-wrap">{image.description}</p>
                 </div>
               )}
+
+              {/* Action Buttons */}
+              <div className="border-t border-gray-200 pt-4 mt-6">
+                <h4 className="text-sm font-medium text-gray-800 mb-3">Actions</h4>
+                <div className="grid grid-cols-3 gap-2">
+                  {/* Primary CTA - Download */}
+                  <button
+                    onClick={handleDownload}
+                    className="flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white px-3 py-2.5 rounded-lg font-medium transition-colors text-sm"
+                  >
+                    <Download className="w-4 h-4" />
+                    Download
+                  </button>
+
+                  {/* Secondary CTAs */}
+                  <button
+                    onClick={handleShare}
+                    className="flex items-center justify-center gap-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2.5 rounded-lg font-medium transition-colors text-sm"
+                  >
+                    <Share2 className="w-4 h-4" />
+                    Share
+                  </button>
+                  <button
+                    onClick={handleEdit}
+                    className="flex items-center justify-center gap-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2.5 rounded-lg font-medium transition-colors text-sm"
+                  >
+                    <Edit3 className="w-4 h-4" />
+                    Edit
+                  </button>
+                </div>
+              </div>
+            </div>
             </div>
           </div>
         </div>

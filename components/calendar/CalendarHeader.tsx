@@ -1,78 +1,85 @@
-'use client'
-
-import { ChevronLeft, ChevronRight, Plus, RefreshCw } from 'lucide-react'
-import { Button } from "@/components/ui/button"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import React from "react";
+import { Button } from "@/components/ui/button";
+import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { format, startOfWeek, endOfWeek } from "date-fns";
+import { CalendarView } from "./types";
+import { classNames } from "./utils";
 
 interface CalendarHeaderProps {
-  currentDate: Date
-  navigateToPreviousMonth: () => void
-  navigateToNextMonth: () => void
-  navigateToToday: () => void
-  openCampaignModal: () => void
-  onRefresh: () => void
-  isRefreshing?: boolean
+  view: CalendarView;
+  setView: (v: CalendarView) => void;
+  cursor: Date;
+  goPrev: () => void;
+  goNext: () => void;
+  goToday: () => void;
+  onCreate?: () => void;
 }
 
-export default function CalendarHeader({
-  currentDate,
-  navigateToPreviousMonth,
-  navigateToNextMonth,
-  navigateToToday,
-  openCampaignModal,
-  onRefresh,
-  isRefreshing = false,
+export function CalendarHeader({
+  view,
+  setView,
+  cursor,
+  goPrev,
+  goNext,
+  goToday,
+  onCreate,
 }: CalendarHeaderProps) {
-  const monthNames = [
-    "January", "February", "March", "April", "May", "June",
-    "July", "August", "September", "October", "November", "December"
-  ]
+  const title =
+    view === "year"
+      ? format(cursor, "yyyy")
+      : view === "month"
+      ? format(cursor, "MMMM yyyy")
+      : view === "week"
+      ? `${format(startOfWeek(cursor, { weekStartsOn: 1 }), "MMM d")} – ${format(endOfWeek(cursor, { weekStartsOn: 1 }), "MMM d, yyyy")}`
+      : format(cursor, "EEEE, MMM d, yyyy");
 
   return (
-    <div className="bg-white px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-      <div className="flex items-center gap-4">
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={navigateToPreviousMonth}>
-            <ChevronLeft className="w-4 h-4" />
-          </Button>
-          <h3 className="text-lg font-semibold text-gray-900">
-            {monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}
-          </h3>
-          <Button variant="ghost" size="sm" onClick={navigateToNextMonth}>
-            <ChevronRight className="w-4 h-4" />
-          </Button>
-        </div>
-        <Button variant="outline" size="sm" onClick={navigateToToday}>
-          Today
+    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <div className="flex items-center gap-2">
+        <Button variant="outline" className="rounded-xl" onClick={goPrev}>
+          <ChevronLeft className="h-4 w-4" />
         </Button>
-        <Button 
-          variant="outline" 
-          size="sm" 
-          onClick={onRefresh}
-          disabled={isRefreshing}
-          className={isRefreshing ? 'opacity-50' : ''}
-        >
-          <RefreshCw className={`w-4 h-4 mr-1 ${isRefreshing ? 'animate-spin' : ''}`} />
-          Sync Jira
+        <Button variant="outline" className="rounded-xl" onClick={goNext}>
+          <ChevronRight className="h-4 w-4" />
         </Button>
+        <Button variant="secondary" className="rounded-xl" onClick={goToday}>Today</Button>
+        <div className="ml-3 text-2xl font-semibold tracking-tight">{title}</div>
       </div>
 
-      <div className="flex items-center gap-3">
-        <Select defaultValue="month">
-          <SelectTrigger className="w-24">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="month">Month</SelectItem>
-            <SelectItem value="week">Week</SelectItem>
-            <SelectItem value="day">Day</SelectItem>
-          </SelectContent>
-        </Select>
-        <Button className="bg-pink-500 hover:bg-pink-600 text-white" onClick={openCampaignModal}>
-          <Plus className="w-4 h-4 mr-2" />
-          New Campaign
-        </Button>
+      <div className="flex items-center gap-2">
+        <ViewSwitch value={view} onChange={setView} />
+        {onCreate && (
+          <Button className="rounded-2xl gap-2" onClick={onCreate}>
+            <Plus className="h-4 w-4" /> Create Event
+          </Button>
+        )}
       </div>
     </div>
-  )
+  );
+}
+
+function ViewSwitch({ value, onChange }: { value: CalendarView; onChange: (v: CalendarView) => void }) {
+  return (
+    <div className="grid grid-cols-4 rounded-2xl border bg-white p-1 shadow-sm">
+      {(
+        [
+          { key: "day", label: "Day" },
+          { key: "week", label: "Week" },
+          { key: "month", label: "Month" },
+          { key: "year", label: "Year" },
+        ] as { key: CalendarView; label: string }[]
+      ).map((opt) => (
+        <button
+          key={opt.key}
+          onClick={() => onChange(opt.key)}
+          className={classNames(
+            "px-3 py-2 text-sm font-medium rounded-xl transition",
+            value === opt.key ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"
+          )}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  );
 }

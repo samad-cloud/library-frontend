@@ -1,191 +1,178 @@
-'use client'
+import React, { useMemo, useState, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  add,
+  addDays,
+  addWeeks,
+  addYears,
+  addMonths,
+  subMonths,
+  subDays,
+  subWeeks,
+  subYears,
+  endOfWeek,
+  startOfWeek,
+  eachDayOfInterval,
+  set,
+  startOfDay,
+  endOfDay,
+} from "date-fns";
 
-import { useState, useEffect } from 'react'
-import CalendarHeader from './CalendarHeader'
-import CalendarGrid from './CalendarGrid'
-import CampaignModal from '@/components/modals/CampaignModal'
-import { createClient } from '@/utils/supabase/client'
+import { CalendarHeader } from "./CalendarHeader";
+import { DayView } from "./DayView";
+import { WeekView } from "./WeekView";
+import { MonthView } from "./MonthView";
+import { YearView } from "./YearView";  
+import { CreateEventModal } from "./CreateEventModal";
+import { CalendarEvent, CalendarView } from "./types";
+import { uid, eventsForDate } from "./utils";
 
-interface CalendarEvent {
-  id: string
-  event_id: string
-  summary: string
-  description: string
-  issue_type: string
-  due_date: string
-  raw_data: any
+interface EventCalendarAppProps {
+  initialEvents?: CalendarEvent[]
+  onCreateEvent?: (event: CalendarEvent) => void | Promise<void>
+  onEventClick?: (event: CalendarEvent) => void
+  showCreateButton?: boolean
 }
 
-interface Campaign {
-  id: string
-  name: string
-  date: string
-  description?: string
-  issue_type?: string
-  raw_data?: any
-  triggerTiming?: string
-  details?: string
-  region?: string
-  products?: string[]
-  styles?: string[]
-  variations?: number
-}
+export default function EventCalendarApp({ 
+  initialEvents = [], 
+  onCreateEvent,
+  onEventClick,
+  showCreateButton = true 
+}: EventCalendarAppProps) {
+  const [view, setView] = useState<CalendarView>("month"); // default to Month view
+  const [cursor, setCursor] = useState<Date>(new Date());
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [isModalOpen, setModalOpen] = useState(false);
 
-export default function Calendar() {
-  const [currentDate, setCurrentDate] = useState(new Date())
-  const [showCampaignModal, setShowCampaignModal] = useState(false)
-  const [selectedDate, setSelectedDate] = useState<Date | null>(null)
-  const [events, setEvents] = useState<CalendarEvent[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [isRefreshing, setIsRefreshing] = useState(false)
-
-  const fetchEvents = async () => {
-    try {
-        const supabase = createClient()
-        const { data: { session } } = await supabase.auth.getSession()
-        
-        if (!session?.user) {
-          setIsLoading(false)
-          return
-        }
-
-        // Get the start and end of the current month
-        const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1)
-        const endOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0)
-
-        const { data, error } = await supabase
-          .from('calendar_events')
-          .select('*')
-          .eq('user_id', session.user.id)
-          .gte('due_date', startOfMonth.toISOString())
-          .lte('due_date', endOfMonth.toISOString())
-          .order('due_date', { ascending: true })
-
-        if (error) {
-          console.error('Error fetching calendar events:', error)
-          return
-        }
-
-        setEvents(data || [])
-      } catch (error) {
-        console.error('Error fetching calendar events:', error)
-      } finally {
-        setIsLoading(false)
-      }
-    }
-
+  // Load initial events
   useEffect(() => {
-    fetchEvents()
-  }, [currentDate]) // Refetch when month changes
-
-  const handleRefresh = async () => {
-    try {
-      setIsRefreshing(true)
-      const supabase = createClient()
-      const { data: { session } } = await supabase.auth.getSession()
-      
-      if (!session?.user) return
-
-      // Get the Jira integration credentials
-      const { data: integration, error: integrationError } = await supabase
-        .from('external_integrations')
-        .select('*')
-        .eq('user_id', session.user.id)
-        .eq('type', 'jira')
-        .single()
-
-      if (integrationError || !integration) {
-        console.error('No Jira integration found:', integrationError)
-        return
-      }
-
-      // Call the API route to fetch new events
-      const response = await fetch('/api/connect-jira/route', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          credentials: integration.credentials,
-          action: 'sync'
-        })
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to sync Jira events')
-      }
-
-      // After syncing, fetch the updated events
-      await fetchEvents()
-    } catch (error) {
-      console.error('Error refreshing Jira events:', error)
-    } finally {
-      setIsRefreshing(false)
+    if (initialEvents.length > 0) {
+      setEvents(initialEvents)
     }
-  }
+  }, [initialEvents])
 
-  const navigateToPreviousMonth = () => {
-    setCurrentDate((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))
-  }
+  const startOfWeekDate = useMemo(() => startOfWeek(cursor, { weekStartsOn: 1 }), [cursor]);
+  const endOfWeekDate = useMemo(() => endOfWeek(cursor, { weekStartsOn: 1 }), [cursor]);
 
-  const navigateToNextMonth = () => {
-    setCurrentDate((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))
-  }
+  const currentWeekDays = useMemo(
+    () => eachDayOfInterval({ start: startOfWeekDate, end: endOfWeekDate }),
+    [startOfWeekDate, endOfWeekDate]
+  );
 
-  const navigateToToday = () => {
-    const today = new Date()
-    setCurrentDate(new Date(today.getFullYear(), today.getMonth(), 1))
-  }
+  // Nav handlers
+  const goPrev = () => {
+    if (view === "day") setCursor(subDays(cursor, 1));
+    if (view === "week") setCursor(subWeeks(cursor, 1));
+    if (view === "month") setCursor(subMonths(cursor, 1));
+    if (view === "year") setCursor(subYears(cursor, 1));
+  };
+  const goNext = () => {
+    if (view === "day") setCursor(addDays(cursor, 1));
+    if (view === "week") setCursor(addWeeks(cursor, 1));
+    if (view === "month") setCursor(addMonths(cursor, 1));
+    if (view === "year") setCursor(addYears(cursor, 1));
+  };
+  const goToday = () => setCursor(new Date());
 
-  const openCampaignModal = (date?: Date) => {
-    if (date) {
-      setSelectedDate(date)
-    } else {
-      setSelectedDate(null)
+  async function createEvent(e: CalendarEvent) {
+    const newEvent = { ...e, id: uid() }
+    setEvents((prev) => [...prev, newEvent]);
+    
+    // Call external create handler if provided
+    if (onCreateEvent) {
+      try {
+        await onCreateEvent(newEvent)
+      } catch (error) {
+        console.error('Error creating event:', error)
+        // Optionally remove the event from local state if external creation fails
+        setEvents((prev) => prev.filter(event => event.id !== newEvent.id))
+      }
     }
-    setShowCampaignModal(true)
   }
 
   return (
-    <>
-      <CalendarHeader
-        currentDate={currentDate}
-        navigateToPreviousMonth={navigateToPreviousMonth}
-        navigateToNextMonth={navigateToNextMonth}
-        navigateToToday={navigateToToday}
-        openCampaignModal={() => openCampaignModal()}
-        onRefresh={handleRefresh}
-        isRefreshing={isRefreshing}
-      />
-
-      <CalendarGrid
-        currentDate={currentDate}
-        existingCampaigns={events.map(event => ({
-          id: event.event_id,
-          name: event.summary,
-          date: new Date(event.due_date).toISOString().split('T')[0],
-          description: event.description,
-          issue_type: event.issue_type,
-          raw_data: event.raw_data
-        }))}
-        openCampaignModal={openCampaignModal}
-        isLoading={isLoading}
-      />
-
-      {showCampaignModal && (
-        <CampaignModal
-          selectedDate={selectedDate}
-          onClose={() => setShowCampaignModal(false)}
-          existingCampaigns={events.map(event => ({
-            id: event.event_id,
-            name: event.summary,
-            date: new Date(event.due_date).toISOString().split('T')[0],
-            description: event.description,
-            issue_type: event.issue_type,
-            raw_data: event.raw_data
-          }))}
+    <div className="w-full min-h-screen bg-gradient-to-b from-white to-slate-50 p-6">
+      <div className="mx-auto max-w-7xl space-y-4">
+        <CalendarHeader
+          view={view}
+          setView={setView}
+          cursor={cursor}
+          goPrev={goPrev}
+          goNext={goNext}
+          goToday={goToday}
+          onCreate={showCreateButton ? () => setModalOpen(true) : undefined}
         />
-      )}
-    </>
-  )
+
+        <div className="rounded-2xl border bg-white shadow-sm">
+          <AnimatePresence mode="wait">
+            {view === "day" && (
+              <motion.div
+                key="day"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                className="p-4 md:p-6"
+              >
+                <DayView date={cursor} events={eventsForDate(cursor, events)} onEventClick={onEventClick} />
+              </motion.div>
+            )}
+            {view === "week" && (
+              <motion.div
+                key="week"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                className="p-2 md:p-4"
+              >
+                <WeekView 
+                  days={currentWeekDays} 
+                  events={events} 
+                  onDayClick={(d) => { setCursor(d); setView("day"); }}
+                  onEventClick={onEventClick}
+                />
+              </motion.div>
+            )}
+            {view === "month" && (
+              <motion.div
+                key="month"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                className="p-2 md:p-4"
+              >
+                <MonthView
+                  monthDate={cursor}
+                  events={events}
+                  onSelectDate={(d) => { setCursor(d); setView("day"); }}
+                />
+              </motion.div>
+            )}
+            {view === "year" && (
+              <motion.div
+                key="year"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                className="p-4 md:p-6"
+              >
+                <YearView
+                  yearDate={cursor}
+                  events={events}
+                  onSelectDate={(d) => { setCursor(d); setView("day"); }}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        <CreateEventModal
+          open={isModalOpen}
+          onOpenChange={setModalOpen}
+          onCreate={createEvent}
+          baseDate={cursor}
+        />
+      </div>
+    </div>
+  );
 }

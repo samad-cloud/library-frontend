@@ -1,5 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/utils/supabase/server'
+import Dashboard from '@/components/dashboard/Dashboard'
+import AppLayout from '@/components/shared/AppLayout'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -10,32 +12,20 @@ export default async function DashboardPage() {
     redirect('/auth/login')
   }
 
-  // Fetch user data from your Users table
-  const { data: userData, error: userError } = await supabase
-    .from('Users')
-    .select(`
-      *,
-      Organizations (
-        name,
-        plan
-      )
-    `)
-    .eq('id', user.id)
-    .single()
-
-  if (userError) {
-    console.error('Error fetching user data:', userError)
-    return <div>Error loading user data</div>
-  }
-
   return (
-    <div>
-      <h1>Welcome, {userData.name}</h1>
-      <p>Organization: {userData.Organizations.name}</p>
-      <p>Plan: {userData.Organizations.plan}</p>
-      <p>Role: {userData.role}</p>
-      
-      {/* Add your dashboard content here */}
-    </div>
+    <AppLayout>
+      <div className="p-6">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-foreground mb-2">
+            Dashboard
+          </h1>
+          <p className="text-muted-foreground">
+            Welcome back! Here's an overview of your activity and projects.
+          </p>
+        </div>
+        
+        <Dashboard user={user} />
+      </div>
+    </AppLayout>
   )
 }

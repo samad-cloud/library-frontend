@@ -5,9 +5,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 interface CreativePreferencesProps {
   selectedStyles: string[]
   toggleSettingsStyle: (style: string) => void
+  numberOfVariations: number
+  onNumberOfVariationsChange: (count: number) => void
 }
 
-export default function CreativePreferences({ selectedStyles, toggleSettingsStyle }: CreativePreferencesProps) {
+export default function CreativePreferences({ 
+  selectedStyles, 
+  toggleSettingsStyle, 
+  numberOfVariations, 
+  onNumberOfVariationsChange 
+}: CreativePreferencesProps) {
   return (
     <div className="mb-8">
       <h3 className="text-lg font-medium text-gray-900 mb-4">🎨 Creative Preferences</h3>
@@ -61,7 +68,10 @@ export default function CreativePreferences({ selectedStyles, toggleSettingsStyl
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">Number of Variations</label>
-          <Select defaultValue="1">
+          <Select 
+            value={numberOfVariations.toString()} 
+            onValueChange={(value) => onNumberOfVariationsChange(parseInt(value))}
+          >
             <SelectTrigger className="w-24 rounded-lg">
               <SelectValue />
             </SelectTrigger>
