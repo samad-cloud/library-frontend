@@ -1,6 +1,6 @@
 'use client'
 
-import { LayoutDashboard, Calendar, Zap, Edit, Library, Upload, Settings, Grid3X3 } from 'lucide-react'
+import { LayoutDashboard, Calendar, Zap, Edit, Library, Upload, Settings, Grid3X3, Code } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
@@ -16,6 +16,7 @@ const sidebarItems = [
   { icon: Edit, label: "Editor", href: "/editor" },
   { icon: Library, label: "Library", href: "/library" },
   { icon: Upload, label: "Upload", href: "/upload" },
+  { icon: Code, label: "API Test", href: "/api-test" },
   { icon: Settings, label: "Settings", href: "/settings" },
 ]
 
