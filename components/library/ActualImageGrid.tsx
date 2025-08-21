@@ -1,13 +1,16 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { createClient } from '@/utils/supabase/client'
+import { Virtuoso } from 'react-virtuoso'
 import ImagePreviewModal from './ImagePreviewModal'
-import OptimizedImage from './OptimizedImage'
+import ProgressiveImage from '../ProgressiveImage'
+import { useDebouncedSearch } from '@/hooks/useDebouncedValue'
 
 interface DatabaseImage {
   id: string
   storage_url: string
+  thumb_url?: string | null
+  blurhash?: string | null
   title: string
   description: string | null
   tags: string[]
@@ -20,6 +23,8 @@ interface DatabaseImage {
   generation_metadata: any
   manual_request_data: any
   created_at: string
+  width?: number | null
+  height?: number | null
   // Joined from image_generations
   generation_trigger?: string
   generation_persona?: string
@@ -46,7 +51,7 @@ export default function ActualImageGrid({ isPublic = false }: ActualImageGridPro
   const [generationGroups, setGenerationGroups] = useState<GenerationGroup[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedImage, setSelectedImage] = useState<DatabaseImage | null>(null)
-  const [searchTerm, setSearchTerm] = useState('')
+  const { value: searchTerm, debouncedValue: debouncedSearchTerm, setValue: setSearchTerm } = useDebouncedSearch('', 200)
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [allTags, setAllTags] = useState<string[]>([])
   const [showAllTags, setShowAllTags] = useState(false)
@@ -54,11 +59,6 @@ export default function ActualImageGrid({ isPublic = false }: ActualImageGridPro
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
   const [selectedSource, setSelectedSource] = useState<string>('')
   const [selectedStatus, setSelectedStatus] = useState<string>('')
-  const [imageLoadStats, setImageLoadStats] = useState<{
-    totalImages: number
-    loadedImages: number
-    startTime: number | null
-  }>({ totalImages: 0, loadedImages: 0, startTime: null })
   
   // Infinite scroll and pagination state
   const [currentPage, setCurrentPage] = useState(1)
@@ -68,97 +68,33 @@ export default function ActualImageGrid({ isPublic = false }: ActualImageGridPro
   const [usePagination, setUsePagination] = useState(false)
   
   // Configuration
-  const GROUPS_PER_PAGE = 20
-  const INFINITE_SCROLL_LIMIT = 40 // After 40 groups, switch to pagination
+  const GROUPS_PER_PAGE = 12 // Smaller pages for faster perceived load
+  const INFINITE_SCROLL_LIMIT = 36 // After 36 groups, switch to pagination
   
-  const supabase = createClient()
-  const loadMoreRef = useRef<HTMLDivElement>(null)
+  const virtuosoRef = useRef<any>(null)
 
-  // Fetch all unique tags and sources for filtering
-  const fetchAllFilterOptions = async () => {
+  // Fetch unique tags from initial data (optimized)
+  const fetchAllFilterOptions = useCallback(async () => {
     try {
-      const { data, error } = await supabase
-        .from('images')
-        .select('tags, generation_source')
-        .not('tags', 'is', null)
-
-      if (error) throw error
-
-      const tags = new Set<string>()
-      const sources = new Set<string>()
+      // Use the new API to get a sample of groups for tag extraction
+      const response = await fetch(`/api/image-groups?limit=100`)
+      if (!response.ok) throw new Error('Failed to fetch filter options')
       
-      data?.forEach((item: any) => {
-        // Extract tags
-        if (item.tags && Array.isArray(item.tags)) {
-          item.tags.forEach((tag: string) => tags.add(tag))
-        }
-        
-        // Extract sources
-        if (item.generation_source) {
-          sources.add(item.generation_source)
-        }
+      const { groups } = await response.json()
+      const tags = new Set<string>()
+      
+      groups?.forEach((group: GenerationGroup) => {
+        group.all_tags?.forEach((tag: string) => tags.add(tag))
       })
 
       setAllTags(Array.from(tags).sort())
     } catch (error) {
       console.error('Error fetching filter options:', error)
     }
-  }
+  }, [])
 
-  // Group images by generation_id and create GenerationGroup objects
-  const groupImagesByGeneration = (images: DatabaseImage[]): GenerationGroup[] => {
-    const grouped = new Map<string, GenerationGroup>()
-    
-    images.forEach(image => {
-      const key = image.generation_id || `no-generation-${image.id}`
-      
-      if (!grouped.has(key)) {
-        // Create new group
-        const group: GenerationGroup = {
-          generation_id: image.generation_id,
-          trigger: image.generation_trigger || image.title || 'Unknown Generation',
-          source: image.generation_source,
-          status: image.generation_status || 'completed',
-          created_at: image.created_at,
-          all_tags: [],
-          images: []
-        }
-        grouped.set(key, group)
-      }
-      
-      const group = grouped.get(key)!
-      group.images.push(image)
-      
-      // Collect all tags from this generation
-      if (image.tags) {
-        image.tags.forEach(tag => {
-          if (!group.all_tags.includes(tag)) {
-            group.all_tags.push(tag)
-          }
-        })
-      }
-    })
-    
-    // Sort images within each group by style_type and creation date
-    Array.from(grouped.values()).forEach(group => {
-      group.images.sort((a, b) => {
-        // First sort by style_type
-        if (a.style_type && b.style_type && a.style_type !== b.style_type) {
-          return a.style_type.localeCompare(b.style_type)
-        }
-        // Then by creation date
-        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-      })
-      
-      // Sort tags alphabetically
-      group.all_tags.sort()
-    })
-    
-    return Array.from(grouped.values())
-  }
-
-  // Fetch images with filters and pagination, then group by generation
-  const fetchImages = useCallback(async (page: number = 1, append: boolean = false) => {
+  // Fetch generation groups using the optimized API
+  const fetchGenerationGroups = useCallback(async (page: number = 1, append: boolean = false) => {
     try {
       if (!append) {
         setLoading(true)
@@ -169,166 +105,67 @@ export default function ActualImageGrid({ isPublic = false }: ActualImageGridPro
         setIsLoadingMore(true)
       }
       
-      console.log('🔍 Starting image fetch...', { page, append })
-      console.log('Filters:', { searchTerm, selectedSource, selectedStatus, selectedTags, sortBy, sortOrder })
+      console.log('🔍 Fetching generation groups...', { page, append })
       
-      // For speed, we'll fetch larger batches and do grouping on client side
-      const batchSize = append ? GROUPS_PER_PAGE * 10 : GROUPS_PER_PAGE * 15 // Fetch more images to ensure we get enough groups
-      const offset = (page - 1) * batchSize
-      
-      // Main query with joins to get generation data - optimized for speed
-      let query = supabase
-        .from('images')
-        .select(`
-          id,
-          storage_url,
-          title,
-          description,
-          tags,
-          style_type,
-          prompt_used,
-          model_name,
-          generation_source,
-          generation_id,
-          created_at,
-          image_generations!inner(
-            trigger,
-            status,
-            completed_at
-          )
-        `)
-        .range(offset, offset + batchSize - 1)
-
-      // Apply search filter - search in trigger from image_generations table
-      if (searchTerm) {
-        query = query.or(`title.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%,prompt_used.ilike.%${searchTerm}%,image_generations.trigger.ilike.%${searchTerm}%`)
-      }
-
-      // Apply source filter
-      if (selectedSource) {
-        query = query.eq('generation_source', selectedSource)
-      }
-
-      // Apply status filter (from image_generations)
-      if (selectedStatus) {
-        query = query.eq('image_generations.status', selectedStatus)
-      }
-
-      // Apply sorting - sort by generation creation date for grouping efficiency
-      if (sortBy === 'date') {
-        query = query.order('created_at', { ascending: sortOrder === 'asc' })
-      } else if (sortBy === 'source') {
-        query = query.order('generation_source', { ascending: sortOrder === 'asc' })
-      } else if (sortBy === 'status') {
-        query = query.order('image_generations.status', { ascending: sortOrder === 'asc' })
-      }
-
-      console.log('📡 Executing Supabase query...')
-      const { data, error } = await query
-
-      if (error) {
-        console.error('❌ Supabase query error:', error)
-        throw error
-      }
-
-      console.log('✅ Raw query result:', data?.length || 0, 'images')
-
-      // Process the joined data to flatten the structure
-      let images = (data || []).map((item: any) => ({
-        ...item,
-        generation_trigger: item.image_generations?.trigger,
-        generation_status: item.image_generations?.status,
-        generation_completed_at: item.image_generations?.completed_at
-      })) as DatabaseImage[]
-
-      // Client-side tag filtering (since we're using array contains)
-      if (selectedTags.length > 0) {
-        console.log('🏷️ Applying tag filter:', selectedTags)
-        images = images.filter(image => {
-          const imageTags = image.tags || []
-          return selectedTags.every(tag => imageTags.includes(tag))
-        })
-        console.log('📊 After tag filtering:', images.length)
-      }
-
-      // Group images by generation_id
-      const newGroups = groupImagesByGeneration(images)
-      console.log('🎯 Grouped into:', newGroups.length, 'generation groups')
-      
-      // Calculate total images for performance tracking
-      const totalImages = newGroups.reduce((acc, group) => acc + group.images.length, 0)
-      
-      // Sort groups by their creation date
-      newGroups.sort((a, b) => {
-        if (sortOrder === 'asc') {
-          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-        } else {
-          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        }
+      // Build query parameters
+      const params = new URLSearchParams({
+        page: page.toString(),
+        limit: GROUPS_PER_PAGE.toString(),
+        sortBy,
+        sortOrder
       })
       
-      // For pagination, we need to limit the number of groups shown
-      const groupsToShow = newGroups.slice(0, GROUPS_PER_PAGE)
-      const hasMore = newGroups.length >= GROUPS_PER_PAGE
+      if (debouncedSearchTerm) params.set('search', debouncedSearchTerm)
+      if (selectedSource) params.set('source', selectedSource)
+      if (selectedStatus) params.set('status', selectedStatus)
+      if (selectedTags.length > 0) params.set('tags', selectedTags.join(','))
       
-      // Determine if we should use pagination after this load
-      const currentTotalGroups = append ? generationGroups.length + groupsToShow.length : groupsToShow.length
+      console.log('📡 API call with params:', Object.fromEntries(params))
+      const response = await fetch(`/api/image-groups?${params.toString()}`)
+      
+      if (!response.ok) {
+        throw new Error(`API call failed: ${response.statusText}`)
+      }
+      
+      const { groups, total, totalPages } = await response.json()
+      console.log(`✅ Fetched ${groups?.length || 0} groups (total: ${total})`)
+      
+      // Check if we should use pagination
+      const currentTotalGroups = append ? generationGroups.length + (groups?.length || 0) : (groups?.length || 0)
       const shouldUsePagination = currentTotalGroups >= INFINITE_SCROLL_LIMIT
-
+      
       setUsePagination(shouldUsePagination)
-      setHasMoreData(hasMore && !shouldUsePagination)
-      setTotalGroupCount(newGroups.length)
+      setHasMoreData(page < totalPages && !shouldUsePagination)
+      setTotalGroupCount(total || 0)
       
       if (append) {
-        setGenerationGroups(prev => [...prev, ...groupsToShow])
+        setGenerationGroups(prev => [...prev, ...(groups || [])])
         setCurrentPage(page)
       } else {
-        setGenerationGroups(groupsToShow)
-        setImageLoadStats({
-          totalImages,
-          loadedImages: 0,
-          startTime: Date.now()
-        })
+        setGenerationGroups(groups || [])
       }
       
     } catch (error) {
-      console.error('❌ Error fetching images:', error)
+      console.error('❌ Error fetching generation groups:', error)
     } finally {
       setLoading(false)
       setIsLoadingMore(false)
     }
-  }, [searchTerm, selectedSource, selectedStatus, selectedTags, sortBy, sortOrder, generationGroups.length, GROUPS_PER_PAGE, INFINITE_SCROLL_LIMIT, supabase])
+  }, [debouncedSearchTerm, selectedSource, selectedStatus, selectedTags, sortBy, sortOrder, generationGroups.length, GROUPS_PER_PAGE, INFINITE_SCROLL_LIMIT])
 
-  // Load more images for infinite scroll
-  const loadMoreImages = useCallback(async () => {
+  // Load more groups for infinite scroll
+  const loadMoreGroups = useCallback(async () => {
     if (!hasMoreData || isLoadingMore || usePagination) return
     
     const nextPage = currentPage + 1
-    await fetchImages(nextPage, true)
-  }, [currentPage, hasMoreData, isLoadingMore, usePagination, fetchImages])
-
-  // Infinite scroll intersection observer
-  useEffect(() => {
-    if (!loadMoreRef.current || usePagination || !hasMoreData) return
-
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          loadMoreImages()
-        }
-      },
-      { threshold: 0.1, rootMargin: '100px' }
-    )
-
-    observer.observe(loadMoreRef.current)
-    return () => observer.disconnect()
-  }, [loadMoreImages, usePagination, hasMoreData])
+    await fetchGenerationGroups(nextPage, true)
+  }, [currentPage, hasMoreData, isLoadingMore, usePagination, fetchGenerationGroups])
 
   // Pagination handlers
   const goToPage = (page: number) => {
     setCurrentPage(page)
-    fetchImages(page, false)
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+    fetchGenerationGroups(page, false)
+    virtuosoRef.current?.scrollToIndex(0)
   }
 
   const goToPreviousPage = () => {
@@ -338,11 +175,6 @@ export default function ActualImageGrid({ isPublic = false }: ActualImageGridPro
   const goToNextPage = () => {
     const totalPages = Math.ceil(totalGroupCount / GROUPS_PER_PAGE)
     if (currentPage < totalPages) goToPage(currentPage + 1)
-  }
-
-  // Handle search and filter changes
-  const handleSearchChange = (value: string) => {
-    setSearchTerm(value)
   }
 
   const handleTagToggle = (tag: string) => {
@@ -375,29 +207,24 @@ export default function ActualImageGrid({ isPublic = false }: ActualImageGridPro
   // Initial load
   useEffect(() => {
     fetchAllFilterOptions()
-  }, [])
+  }, [fetchAllFilterOptions])
 
   useEffect(() => {
-    fetchImages(1, false) // Reset to first page when filters change
-  }, [searchTerm, selectedTags, selectedSource, selectedStatus, sortBy, sortOrder])
+    fetchGenerationGroups(1, false) // Reset to first page when filters change
+  }, [debouncedSearchTerm, selectedTags, selectedSource, selectedStatus, sortBy, sortOrder])
 
-  // Track image load performance
-  const handleImageLoad = () => {
-    setImageLoadStats(prev => {
-      const newLoadedCount = prev.loadedImages + 1
-      const isComplete = newLoadedCount === prev.totalImages
-      
-      if (isComplete && prev.startTime) {
-        const loadTime = Date.now() - prev.startTime
-        console.log(`📈 Performance: ${newLoadedCount} images loaded in ${loadTime}ms (${(loadTime/newLoadedCount).toFixed(1)}ms avg per image)`)
-      }
-      
-      return {
-        ...prev,
-        loadedImages: newLoadedCount
-      }
-    })
-  }
+  // Throttled performance tracking (avoid excessive re-renders)
+  const performanceStatsRef = useRef({ loadedImages: 0, totalImages: 0, startTime: Date.now() })
+  
+  const handleImageLoad = useCallback(() => {
+    performanceStatsRef.current.loadedImages += 1
+    
+    // Log performance stats periodically, not on every load
+    if (performanceStatsRef.current.loadedImages % 10 === 0) {
+      const loadTime = Date.now() - performanceStatsRef.current.startTime
+      console.log(`📈 Performance: ${performanceStatsRef.current.loadedImages} images loaded in ${loadTime}ms`)
+    }
+  }, [])
 
   // Get source badge style
   const getSourceBadgeStyle = (source: string) => {
@@ -432,8 +259,8 @@ export default function ActualImageGrid({ isPublic = false }: ActualImageGridPro
     return group.status === 'failed'
   }
 
-  // Render individual image
-  const renderImage = (image: DatabaseImage, idxKey: string) => {
+  // Render individual image with progressive loading
+  const renderImage = (image: DatabaseImage, idxKey: string, priority: boolean = false) => {
     const modelLabel = image.model_name === 'gpt-image-1' ? 'DALL-E' : 'Imagen'
     return (
       <div 
@@ -444,17 +271,34 @@ export default function ActualImageGrid({ isPublic = false }: ActualImageGridPro
           setSelectedImage(image)
         }}
       >
-        <OptimizedImage
-          src={image.storage_url}
-          alt={image.title}
-          className="w-full h-full object-cover"
-          loading="lazy"
-          onLoad={handleImageLoad}
-          onError={(e) => {
-            console.error('Image failed to load:', image.storage_url)
-            e.currentTarget.src = '/placeholder.svg'
-          }}
-        />
+        {image.thumb_url || image.blurhash ? (
+          <ProgressiveImage
+            fullSrc={image.storage_url}
+            thumbSrc={image.thumb_url || undefined}
+            blurhash={image.blurhash || undefined}
+            alt={image.title}
+            className="w-full h-full"
+            priority={priority}
+            width={image.width || undefined}
+            height={image.height || undefined}
+            onLoad={handleImageLoad}
+            onError={(e) => {
+              console.error('Image failed to load:', image.storage_url)
+            }}
+          />
+        ) : (
+          <img
+            src={image.storage_url}
+            alt={image.title}
+            className="w-full h-full object-cover"
+            loading={priority ? "eager" : "lazy"}
+            onLoad={handleImageLoad}
+            onError={(e) => {
+              console.error('Image failed to load:', image.storage_url)
+              e.currentTarget.src = '/placeholder.svg'
+            }}
+          />
+        )}
         
         {/* Model badge */}
         <div className="absolute top-2 left-2 bg-black/70 text-white text-xs px-2 py-1 rounded z-10">
@@ -478,15 +322,18 @@ export default function ActualImageGrid({ isPublic = false }: ActualImageGridPro
     )
   }
 
-  // Render generation group (similar to image row in DatabaseImageGrid)
-  const renderGenerationGroup = (group: GenerationGroup) => {
+  // Render generation group with priority loading for first groups
+  const renderGenerationGroup = useCallback((group: GenerationGroup, groupIndex: number) => {
     const generationFailed = hasGenerationFailed(group)
     
     // Limit images shown to first 6 for speed
     const imagesToShow = group.images.slice(0, 6)
     
+    // Mark first 12 images (first 2 groups) as priority for faster loading
+    const isHighPriority = groupIndex < 2
+    
     return (
-      <div key={group.generation_id || 'no-gen'} className="bg-white rounded-lg shadow-md overflow-hidden mb-6">
+      <div key={group.generation_id || `no-gen-${groupIndex}`} className="bg-white rounded-lg shadow-md overflow-hidden mb-6">
         {/* Header with trigger and source */}
         <div className="p-4 border-b border-gray-200">
           <div className="flex items-start justify-between mb-2">
@@ -551,7 +398,7 @@ export default function ActualImageGrid({ isPublic = false }: ActualImageGridPro
           ) : imagesToShow.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
               {imagesToShow.map((img, idx) => 
-                renderImage(img, `${group.generation_id}-${idx}`)
+                renderImage(img, `${group.generation_id}-${idx}`, isHighPriority && idx < 3)
               )}
             </div>
           ) : (
@@ -571,7 +418,7 @@ export default function ActualImageGrid({ isPublic = false }: ActualImageGridPro
         </div>
       </div>
     )
-  }
+  }, [handleTagToggle, getSourceBadgeStyle, renderImage, hasGenerationFailed])
 
   // Get limited tags for display
   const displayTags = showAllTags ? allTags : allTags.slice(0, 10)
@@ -587,7 +434,7 @@ export default function ActualImageGrid({ isPublic = false }: ActualImageGridPro
               type="text"
               placeholder="Search by title, description, or prompt..."
               value={searchTerm}
-              onChange={(e) => handleSearchChange(e.target.value)}
+              onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
             />
             <svg className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -696,10 +543,10 @@ export default function ActualImageGrid({ isPublic = false }: ActualImageGridPro
         </div>
       </div>
 
-      {/* Generation Groups */}
-      <div className="flex-1 p-6">
+      {/* Generation Groups with Virtualization */}
+      <div className="flex-1">
         {generationGroups.length === 0 && !loading ? (
-          <div className="text-center py-12">
+          <div className="text-center py-12 px-6">
             {isPublic ? (
               <div>
                 <div className="w-16 h-16 bg-pink-100 rounded-full mx-auto mb-4 flex items-center justify-center">
@@ -737,21 +584,40 @@ export default function ActualImageGrid({ isPublic = false }: ActualImageGridPro
             )}
           </div>
         ) : (
-          <div className="space-y-6">
-            {generationGroups.map((group) => renderGenerationGroup(group))}
-          </div>
-        )}
-
-        {/* Infinite scroll trigger */}
-        {!loading && !usePagination && hasMoreData && (
-          <div ref={loadMoreRef} className="flex justify-center py-8">
-            {isLoadingMore && (
-              <div className="flex items-center gap-3">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-pink-500"></div>
-                <span className="text-gray-600">Loading more images...</span>
+          <Virtuoso
+            ref={virtuosoRef}
+            style={{ height: '100%' }}
+            data={generationGroups}
+            endReached={!usePagination ? loadMoreGroups : undefined}
+            overscan={200}
+            itemContent={(index, group) => (
+              <div className="px-6 py-3">
+                {renderGenerationGroup(group, index)}
               </div>
             )}
-          </div>
+            components={{
+              Footer: () => {
+                if (loading) {
+                  return (
+                    <div className="flex justify-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-pink-500"></div>
+                    </div>
+                  )
+                }
+                if (isLoadingMore && !usePagination) {
+                  return (
+                    <div className="flex justify-center py-8">
+                      <div className="flex items-center gap-3">
+                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-pink-500"></div>
+                        <span className="text-gray-600">Loading more images...</span>
+                      </div>
+                    </div>
+                  )
+                }
+                return null
+              }
+            }}
+          />
         )}
 
         {/* Pagination UI (appears after scroll limit) */}
@@ -815,32 +681,6 @@ export default function ActualImageGrid({ isPublic = false }: ActualImageGridPro
           </div>
         )}
 
-        {/* Loading indicator */}
-        {loading && (
-          <div className="flex justify-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-pink-500"></div>
-          </div>
-        )}
-
-        {/* Image loading progress indicator */}
-        {!loading && imageLoadStats.totalImages > 0 && imageLoadStats.loadedImages < imageLoadStats.totalImages && (
-          <div className="fixed bottom-4 right-4 bg-white shadow-lg rounded-lg p-3 border z-50">
-            <div className="flex items-center gap-3">
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
-              <span className="text-sm text-gray-700">
-                Loading images: {imageLoadStats.loadedImages}/{imageLoadStats.totalImages}
-              </span>
-            </div>
-            <div className="mt-2 w-48 bg-gray-200 rounded-full h-1.5">
-              <div 
-                className="bg-blue-500 h-1.5 rounded-full transition-all duration-300"
-                style={{ 
-                  width: `${(imageLoadStats.loadedImages / imageLoadStats.totalImages) * 100}%` 
-                }}
-              />
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Image Preview Modal */}

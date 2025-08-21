@@ -18,6 +18,11 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
+      <head>
+        {/* CDN preconnect for faster image loading */}
+        <link rel="preconnect" href="https://nkjihejhyrquyegmqimi.supabase.co" />
+        <link rel="dns-prefetch" href="https://nkjihejhyrquyegmqimi.supabase.co" />
+      </head>
       <body className={`${inter.className} antialiased`}>{children}</body>
     </html>
   )
