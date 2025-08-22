@@ -8,6 +8,7 @@ import ActualImageGrid from './ActualImageGrid'
 
 
 
+
 interface LibraryProps {
   isPublic?: boolean
 }
@@ -25,6 +26,7 @@ export default function Library({ isPublic = false }: LibraryProps) {
         selectedImages={selectedImages}
         isPublic={isPublic}
       /> */}
+
 
       {/* Use ActualImageGrid for both public and authenticated users - shows real images from images table */}
       <ActualImageGrid isPublic={isPublic} />

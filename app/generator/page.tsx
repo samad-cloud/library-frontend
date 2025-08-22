@@ -11,24 +11,16 @@ export default async function GeneratorPage() {
   return (
     <AppLayout>
       <div className="p-6">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-foreground mb-2">
-            AI Image Generator
-          </h1>
-          <p className="text-muted-foreground">
-            {user ? 'Create stunning AI-generated images for your campaigns' : 'Experience our AI image generation capabilities'}
-          </p>
-          {!user && (
-            <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-              <p className="text-sm text-blue-800">
-                💡 Want to save and organize your generated images?{' '}
-                <a href="/auth/login" className="font-medium underline hover:no-underline">
-                  Sign in to get started
-                </a>
-              </p>
-            </div>
-          )}
-        </div>
+        {!user && (
+          <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <p className="text-sm text-blue-800">
+              💡 Want to save and organize your generated images?{' '}
+              <a href="/auth/login" className="font-medium underline hover:no-underline">
+                Sign in to get started
+              </a>
+            </p>
+          </div>
+        )}
         
         <Generator isAuthenticated={!!user} />
       </div>

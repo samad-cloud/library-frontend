@@ -1,8 +1,8 @@
 // Script to backfill thumbnail data for existing images
 const { createClient } = require('@supabase/supabase-js')
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+const supabaseUrl = "https://nkjihejhyrquyegmqimi.supabase.co"
+const supabaseServiceKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5ramloZWpoeXJxdXllZ21xaW1pIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1MTk3NjQwNiwiZXhwIjoyMDY3NTUyNDA2fQ.zUe-taYmWKzycUwpIfeghHA2BNpgVV5cC4a4gBS1GQQ"
 
 if (!supabaseUrl || !supabaseServiceKey) {
   console.error('Missing Supabase environment variables')
@@ -31,7 +31,6 @@ async function backfillThumbnails() {
   for (const image of images) {
     try {
       console.log(`🔄 Processing image ${image.id}...`)
-      
       // Call the edge function to generate thumbnail
       const response = await fetch(`${supabaseUrl}/functions/v1/generate-thumbnail`, {
         method: 'POST',

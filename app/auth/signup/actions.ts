@@ -3,27 +3,37 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/utils/supabase/server'
+import { z } from 'zod'
+
+const signupSchema = z.object({
+  email: z.string().email('Invalid email format'),
+  password: z.string().min(8, 'Password must be at least 8 characters'),
+  name: z.string().min(2, 'Name must be at least 2 characters'),
+  organization_name: z.string().min(2, 'Organization name required')
+})
 
 export async function signup(formData: FormData) {
   const supabase = await createClient()
 
-  const data = {
-    email: formData.get('email') as string,
-    password: formData.get('password') as string,
-  }
+  try {
+    // Validate input data
+    const validatedData = signupSchema.parse({
+      email: formData.get('email'),
+      password: formData.get('password'),
+      name: formData.get('name'),
+      organization_name: formData.get('organization_name')
+    })
 
-  const userData = {
-    name: formData.get('name') as string,
-    organization_name: formData.get('organization_name') as string,
-  }
+    // First create the user authentication
+    const { data: { user }, error: authError } = await supabase.auth.signUp({
+      email: validatedData.email,
+      password: validatedData.password
+    })
 
-  // First create the user authentication
-  const { data: { user }, error: authError } = await supabase.auth.signUp(data)
-
-  if (authError) {
-    console.error('Auth error:', authError)
-    redirect('/auth/error')
-  }
+    if (authError) {
+      console.error('Auth error:', authError)
+      redirect(`/auth/error?message=${encodeURIComponent(authError.message)}`)
+    }
 
   if (user) {
     try {
@@ -31,7 +41,7 @@ export async function signup(formData: FormData) {
       const { data: org, error: orgError } = await supabase
         .from('organizations')
         .insert({
-          name: userData.organization_name,
+          name: validatedData.organization_name,
           plan: 'free', // Default plan
           is_active: true,
           created_at: new Date().toISOString(),
@@ -49,7 +59,7 @@ export async function signup(formData: FormData) {
           id: user.id,
           org_id: org.id,
           email: user.email,
-          name: userData.name,
+          name: validatedData.name,
           role: 'admin', // First user of org is admin
           is_active: true,
           created_at: new Date().toISOString(),
@@ -77,8 +87,17 @@ export async function signup(formData: FormData) {
     } catch (error) {
       console.error('Database error:', error)
       // You might want to handle this differently, possibly cleaning up the auth user
-      redirect('/auth/error')
+      redirect(`/auth/error?message=${encodeURIComponent('Failed to create user profile')}`)
     }
+  }
+
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      // Handle validation errors
+      redirect(`/auth/error?message=${encodeURIComponent(error.errors[0].message)}`)
+    }
+    // Handle other errors
+    redirect(`/auth/error?message=${encodeURIComponent('An unexpected error occurred')}`)
   }
 
   revalidatePath('/', 'layout')

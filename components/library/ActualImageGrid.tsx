@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Virtuoso } from 'react-virtuoso'
+// import { Virtuoso } from 'react-virtuoso' // Temporarily disabled
 import ImagePreviewModal from './ImagePreviewModal'
 import ProgressiveImage from '../ProgressiveImage'
 import { useDebouncedSearch } from '@/hooks/useDebouncedValue'
@@ -71,7 +71,7 @@ export default function ActualImageGrid({ isPublic = false }: ActualImageGridPro
   const GROUPS_PER_PAGE = 12 // Smaller pages for faster perceived load
   const INFINITE_SCROLL_LIMIT = 36 // After 36 groups, switch to pagination
   
-  const virtuosoRef = useRef<any>(null)
+  // const virtuosoRef = useRef<any>(null) // Temporarily disabled
 
   // Fetch unique tags from initial data (optimized)
   const fetchAllFilterOptions = useCallback(async () => {
@@ -165,7 +165,8 @@ export default function ActualImageGrid({ isPublic = false }: ActualImageGridPro
   const goToPage = (page: number) => {
     setCurrentPage(page)
     fetchGenerationGroups(page, false)
-    virtuosoRef.current?.scrollToIndex(0)
+    // virtuosoRef.current?.scrollToIndex(0) // Temporarily disabled
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
   const goToPreviousPage = () => {
@@ -271,34 +272,20 @@ export default function ActualImageGrid({ isPublic = false }: ActualImageGridPro
           setSelectedImage(image)
         }}
       >
-        {image.thumb_url || image.blurhash ? (
-          <ProgressiveImage
-            fullSrc={image.storage_url}
-            thumbSrc={image.thumb_url || undefined}
-            blurhash={image.blurhash || undefined}
-            alt={image.title}
-            className="w-full h-full"
-            priority={priority}
-            width={image.width || undefined}
-            height={image.height || undefined}
-            onLoad={handleImageLoad}
-            onError={(e) => {
-              console.error('Image failed to load:', image.storage_url)
-            }}
-          />
-        ) : (
-          <img
-            src={image.storage_url}
-            alt={image.title}
-            className="w-full h-full object-cover"
-            loading={priority ? "eager" : "lazy"}
-            onLoad={handleImageLoad}
-            onError={(e) => {
-              console.error('Image failed to load:', image.storage_url)
-              e.currentTarget.src = '/placeholder.svg'
-            }}
-          />
-        )}
+        <img
+          src={image.storage_url}
+          alt={image.title}
+          className="w-full h-full object-cover"
+          loading={priority ? "eager" : "lazy"}
+          onLoad={() => {
+            console.log('✅ Image loaded successfully:', image.id)
+            handleImageLoad()
+          }}
+          onError={(e) => {
+            console.error('❌ Image failed to load:', image.storage_url)
+            e.currentTarget.src = '/placeholder.svg'
+          }}
+        />
         
         {/* Model badge */}
         <div className="absolute top-2 left-2 bg-black/70 text-white text-xs px-2 py-1 rounded z-10">
@@ -545,6 +532,7 @@ export default function ActualImageGrid({ isPublic = false }: ActualImageGridPro
 
       {/* Generation Groups with Virtualization */}
       <div className="flex-1">
+
         {generationGroups.length === 0 && !loading ? (
           <div className="text-center py-12 px-6">
             {isPublic ? (
@@ -584,40 +572,42 @@ export default function ActualImageGrid({ isPublic = false }: ActualImageGridPro
             )}
           </div>
         ) : (
-          <Virtuoso
-            ref={virtuosoRef}
-            style={{ height: '100%' }}
-            data={generationGroups}
-            endReached={!usePagination ? loadMoreGroups : undefined}
-            overscan={200}
-            itemContent={(index, group) => (
-              <div className="px-6 py-3">
+          <div className="space-y-6">
+            {/* Simple map rendering instead of Virtuoso */}
+            {generationGroups.map((group, index) => (
+              <div key={group.generation_id || index} className="px-6 py-3">
                 {renderGenerationGroup(group, index)}
               </div>
+            ))}
+            
+            {/* Loading states */}
+            {loading && (
+              <div className="flex justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-pink-500"></div>
+              </div>
             )}
-            components={{
-              Footer: () => {
-                if (loading) {
-                  return (
-                    <div className="flex justify-center py-8">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-pink-500"></div>
-                    </div>
-                  )
-                }
-                if (isLoadingMore && !usePagination) {
-                  return (
-                    <div className="flex justify-center py-8">
-                      <div className="flex items-center gap-3">
-                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-pink-500"></div>
-                        <span className="text-gray-600">Loading more images...</span>
-                      </div>
-                    </div>
-                  )
-                }
-                return null
-              }
-            }}
-          />
+            
+            {isLoadingMore && !usePagination && (
+              <div className="flex justify-center py-8">
+                <div className="flex items-center gap-3">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-pink-500"></div>
+                  <span className="text-gray-600">Loading more images...</span>
+                </div>
+              </div>
+            )}
+            
+            {/* Load more button for infinite scroll */}
+            {!loading && !isLoadingMore && hasMoreData && !usePagination && (
+              <div className="flex justify-center py-8">
+                <button
+                  onClick={loadMoreGroups}
+                  className="px-6 py-3 bg-pink-500 text-white rounded-lg hover:bg-pink-600 transition-colors"
+                >
+                  Load More Images
+                </button>
+              </div>
+            )}
+          </div>
         )}
 
         {/* Pagination UI (appears after scroll limit) */}

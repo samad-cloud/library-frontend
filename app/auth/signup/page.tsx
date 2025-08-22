@@ -2,6 +2,7 @@
 
 import { signup } from './actions'
 import Link from 'next/link'
+import { SubmitButton } from '@/components/auth/SubmitButton'
 
 export default function SignUpPage() {
   return (
@@ -85,14 +86,13 @@ export default function SignUpPage() {
             </div>
           </div>
 
-          <div>
-            <button
-              formAction={signup}
-              className="group relative flex w-full justify-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
-            >
-              Create Account
-            </button>
-          </div>
+          <SubmitButton
+            formAction={signup}
+            className="group relative flex w-full justify-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+            loadingText="Creating account..."
+          >
+            Create Account
+          </SubmitButton>
 
           <div className="text-sm text-center text-gray-600">
             By signing up, you agree to our{' '}

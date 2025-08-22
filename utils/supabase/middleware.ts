@@ -43,6 +43,7 @@ export async function updateSession(request: NextRequest) {
     request.nextUrl.pathname.startsWith(route)
   )
 
+  // Check if user is authenticated
   if (
     !user &&
     !request.nextUrl.pathname.startsWith('/login') &&
@@ -54,6 +55,18 @@ export async function updateSession(request: NextRequest) {
     const url = request.nextUrl.clone()
     url.pathname = '/auth/login'
     return NextResponse.redirect(url)
+  }
+
+  // Check if email is verified (only for authenticated users)
+  if (user && !user.email_confirmed_at) {
+    // Allow access to auth routes and verify-email page
+    if (!request.nextUrl.pathname.startsWith('/auth/verify-email') && 
+        !request.nextUrl.pathname.startsWith('/auth/logout') &&
+        !request.nextUrl.pathname.startsWith('/auth/error')) {
+      const url = request.nextUrl.clone()
+      url.pathname = '/auth/verify-email'
+      return NextResponse.redirect(url)
+    }
   }
 
   // IMPORTANT: You *must* return the supabaseResponse object as it is.
