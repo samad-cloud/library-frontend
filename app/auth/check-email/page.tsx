@@ -1,6 +1,6 @@
 import Link from 'next/link'
 
-export default function ConfirmPage() {
+export default function CheckEmailPage() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center py-2">
       <div className="max-w-md w-full space-y-8">

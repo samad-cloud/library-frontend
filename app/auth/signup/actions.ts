@@ -101,5 +101,5 @@ export async function signup(formData: FormData) {
   }
 
   revalidatePath('/', 'layout')
-  redirect('/auth/confirm')
+  redirect('/auth/check-email')
 }
