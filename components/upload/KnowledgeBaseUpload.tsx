@@ -220,7 +220,11 @@ export default function KnowledgeBaseUpload() {
 
   function getStatusIcon(status: string, lastError: string | null) {
     if (lastError) {
-      return <AlertCircle className="w-4 h-4 text-red-500" title={lastError} />
+      return (
+        <div title={lastError}>
+          <AlertCircle className="w-4 h-4 text-red-500" />
+        </div>
+      )
     }
     return null
   }

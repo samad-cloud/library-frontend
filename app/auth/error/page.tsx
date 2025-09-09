@@ -1,11 +1,12 @@
 import Link from 'next/link'
 
-export default function AuthErrorPage({
+export default async function AuthErrorPage({
   searchParams
 }: {
-  searchParams: { message?: string }
+  searchParams: Promise<{ message?: string }>
 }) {
-  const message = searchParams.message || 'An authentication error occurred'
+  const params = await searchParams
+  const message = params.message || 'An authentication error occurred'
   
   return (
     <div className="flex min-h-screen flex-col items-center justify-center py-2">

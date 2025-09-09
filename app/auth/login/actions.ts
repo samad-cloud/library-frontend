@@ -20,17 +20,9 @@ export async function login(formData: FormData) {
       password: formData.get('password')
     })
 
-    const rememberMe = formData.get('remember_me') === 'on'
-
     const { data: { user }, error } = await supabase.auth.signInWithPassword({
       email: validatedData.email,
       password: validatedData.password,
-      options: {
-        // Extend session if remember me is checked
-        ...(rememberMe && { 
-          persistSession: true
-        })
-      }
     })
 
     if (error) {

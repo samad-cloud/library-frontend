@@ -13,10 +13,10 @@ interface LayoutProps {
 export default function Layout({ children, currentPage, setCurrentPage }: LayoutProps) {
   return (
     <div className="flex h-screen bg-gray-50">
-      <Sidebar currentPage={currentPage} setCurrentPage={setCurrentPage} />
+      <Sidebar />
       
       <div className="flex-1 flex flex-col">
-        <Header currentPage={currentPage} />
+        <Header />
         <div className="flex-1 overflow-auto">
           {children}
         </div>

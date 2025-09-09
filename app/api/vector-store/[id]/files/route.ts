@@ -24,9 +24,10 @@ interface VectorStoreFilesResponse {
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  props: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params
+  const params = await props.params
+  const { id } = params
   if (!id) {
     return NextResponse.json({ error: 'Vector store ID is required' }, { status: 400 })
   }
@@ -55,8 +56,9 @@ export async function GET(
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  props: { params: Promise<{ id: string }> }
 ) {
+  const params = await props.params
   const { id } = params
   if (!id) {
     return NextResponse.json({ error: 'Vector store ID is required' }, { status: 400 })

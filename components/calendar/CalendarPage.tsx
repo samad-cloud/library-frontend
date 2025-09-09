@@ -238,9 +238,7 @@ export default function CalendarPage({ isAuthenticated }: CalendarPageProps) {
           color: event.color || getEventColor(event.status, event.calendars.provider),
           allDay: isAllDay,
           // Add database event data for the modal
-          databaseEvent: event,
-          // Add images data
-          images: event.images || []
+          databaseEvent: event
         }
       })
 
@@ -248,7 +246,7 @@ export default function CalendarPage({ isAuthenticated }: CalendarPageProps) {
       
       // Initialize visible calendars if not set
       if (visibleCalendars.length === 0 && dbEvents.length > 0) {
-        const uniqueCalendarIds: string[] = [...new Set(dbEvents.map((e: DatabaseEvent) => e.calendar_id))]
+        const uniqueCalendarIds = [...new Set(dbEvents.map((e: DatabaseEvent) => e.calendar_id))] as string[]
         setVisibleCalendars(uniqueCalendarIds)
       }
     } catch (err) {

@@ -30,7 +30,7 @@ export default async function UploadPage() {
           )}
         </div>
         
-        <Upload isAuthenticated={!!user} />
+        <Upload />
       </div>
     </AppLayout>
   )

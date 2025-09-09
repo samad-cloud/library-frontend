@@ -26,7 +26,7 @@ export function useOptimizedImageLoading({
   // Preload image for better performance
   const preloadImage = useCallback((url: string) => {
     return new Promise<void>((resolve, reject) => {
-      const img = new Image()
+      const img: HTMLImageElement = new Image()
       img.src = url
       
       // Track loading progress if possible

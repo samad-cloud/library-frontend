@@ -268,7 +268,7 @@ export function EnhancedEventDetailsModal({
               </div>
               
               <div className="grid grid-cols-2 gap-3">
-                {(event.styles || dbEvent.styles || []).map((style) => {
+                {(event.styles || dbEvent.styles || []).map((style: string) => {
                   const Icon = STYLE_ICONS[style as StyleType] || Sparkles;
                   return (
                     <div

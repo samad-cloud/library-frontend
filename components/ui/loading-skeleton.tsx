@@ -64,7 +64,7 @@ export function SkeletonCard({ className, showImage = true, lines = 3 }: Skeleto
             key={i}
             variant="text"
             className="h-3"
-            style={{ width: `${100 - (i + 1) * 10}%` }}
+            width={`${100 - (i + 1) * 10}%`}
           />
         ))}
       </div>

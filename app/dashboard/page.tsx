@@ -24,7 +24,7 @@ export default async function DashboardPage() {
           </p>
         </div>
         
-        <Dashboard user={user} />
+        <Dashboard />
       </div>
     </AppLayout>
   )

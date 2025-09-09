@@ -3,11 +3,12 @@ import { createClient } from '@/utils/supabase/server'
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  props: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await createClient()
-    const { id: templateId } = await params
+    const params = await props.params
+    const { id: templateId } = params
 
     // Get template data
     const { data: template, error: templateError } = await supabase
