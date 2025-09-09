@@ -8,6 +8,22 @@ export type StyleType =
   | 'Close-up shot'
   | 'White background'
 
+export type DepartmentType = 
+  | 'email_marketing'
+  | 'google_sem' 
+  | 'groupon'
+  | 'social_media'
+
+export type EventImage = {
+  id: string;
+  storage_url: string;
+  thumb_url?: string;
+  title: string;
+  created_at: string;
+  model_name: string;
+  generation_source: string;
+}
+
 export type CalendarEvent = {
   id: string;
   title: string;
@@ -18,7 +34,9 @@ export type CalendarEvent = {
   allDay?: boolean;
   number_of_variations?: number;
   styles?: StyleType[];
+  department?: DepartmentType;
   databaseEvent?: any; // Optional database event data for modals
+  images?: EventImage[]; // Generated images for this event
 };
 
 export const COLORS = [

@@ -92,8 +92,13 @@ async function enhanceSocialMediaPrompt(userPrompt: string): Promise<SocialMedia
 async function generateImagesWithModel(enhancedPrompt: SocialMediaEnhancedPrompt, modelName: string): Promise<Buffer[]> {
   console.log(`[SOCIAL-MEDIA] Generating images with ${modelName}...`)
   
-  const fullPrompt = enhancedPrompt.scene
-  console.log(`[SOCIAL-MEDIA] Using prompt: "${fullPrompt.substring(0, 100)}..."`)
+  const fullPrompt = {
+    scene: enhancedPrompt.scene,
+    shot_type: enhancedPrompt.shot_type,
+    composition: enhancedPrompt.composition,
+    colour_palette: enhancedPrompt.colour_palette,
+  }
+  console.log(`[SOCIAL-MEDIA] Using prompt: "${fullPrompt?.scene?.substring(0, 100)}..."`)
 
   // Map frontend model names to actual model IDs
   const modelMap: { [key: string]: string } = {
@@ -107,10 +112,12 @@ async function generateImagesWithModel(enhancedPrompt: SocialMediaEnhancedPrompt
   try {
     const response = await googleAI.models.generateImages({
       model: actualModelId,
-      prompt: fullPrompt,
+      prompt: JSON.stringify(fullPrompt),
       config: {
         numberOfImages: 1,
+        aspectRatio: enhancedPrompt.aspect_ratio,
       },
+      
     })
 
     const buffers: Buffer[] = []
@@ -141,7 +148,7 @@ async function convertImagesToDataUrls(imageBuffers: Buffer[], modelName: string
     const dataUrl = `data:image/png;base64,${base64}`
     
     // Log without the actual base64 content
-    console.log(`[SOCIAL-MEDIA] Converted ${modelName} image ${index + 1} (${Math.round(buffer.length / 1024)}KB)`)
+    // console.log(`[SOCIAL-MEDIA] Converted ${modelName} image ${index + 1} (${Math.round(buffer.length / 1024)}KB)`)
     return dataUrl
   })
 
@@ -252,7 +259,8 @@ async function generateSocialMediaContent(userPrompt: string, selectedModels?: s
     result.models.forEach((model) => {
       console.log(`  ${model.modelName}: ${model.imageUrls.length} images${model.error ? ` (Error: ${model.error})` : ''}`)
       model.imageUrls.forEach((url, index) => {
-        console.log(`    ${index + 1}. ${url}`)
+        const urlPreview = url.substring(0, 50) + '...' + ` (${Math.round((url.length - 22) * 0.75 / 1024)}KB)`
+        console.log(`    ${index + 1}. ${urlPreview}`)
       })
     })
     console.log('=====================================\n')

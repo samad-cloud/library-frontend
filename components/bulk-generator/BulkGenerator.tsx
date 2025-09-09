@@ -77,16 +77,21 @@ export default function BulkGenerator({ isAuthenticated }: BulkGeneratorProps) {
   }, [isAuthenticated, supabase])
 
   const fetchTemplates = async () => {
-    try {
-      const { data, error } = await supabase
-        .rpc('get_available_csv_templates')
-
-      if (error) throw error
-      setTemplates(data || [])
-    } catch (err) {
-      console.error('Error fetching templates:', err)
-      setError('Failed to load templates')
-    }
+    // Create a simple default template for the UI
+    setTemplates([
+      {
+        id: 'default-template',
+        name: 'Bulk Generation Template',
+        description: 'Template with required columns: country, product_type, mpn, size',
+        template_type: 'bulk_generation',
+        required_columns: ['country', 'product_type', 'mpn', 'size'],
+        optional_columns: [],
+        column_descriptions: {},
+        sample_data: {},
+        is_default: true,
+        download_count: 0
+      }
+    ])
   }
 
   const fetchBatches = async () => {
@@ -117,37 +122,81 @@ export default function BulkGenerator({ isAuthenticated }: BulkGeneratorProps) {
     setError(null)
 
     try {
-      // Create FormData for file upload
-      const formData = new FormData()
-      formData.append('file', file)
-      if (template) {
-        formData.append('template_id', template.id)
+      // Parse CSV file
+      const text = await file.text()
+      const lines = text.trim().split('\n')
+      
+      // Simple CSV parsing (handles basic cases)
+      const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''))
+      
+      // Validate required columns exist
+      const requiredColumns = ['country', 'product_type', 'mpn', 'size']
+      const missingColumns = requiredColumns.filter(col => !headers.includes(col))
+      
+      if (missingColumns.length > 0) {
+        throw new Error(`Missing required columns: ${missingColumns.join(', ')}. Your CSV must include: ${requiredColumns.join(', ')}`)
+      }
+      
+      // Convert CSV to array of objects
+      const csvData = lines.slice(1).filter(line => line.trim()).map((line, index) => {
+        const values = line.split(',').map(v => v.trim().replace(/"/g, ''))
+        const row: Record<string, any> = {}
+        headers.forEach((header, headerIndex) => {
+          row[header] = values[headerIndex] || ''
+        })
+        
+        // Validate that this row has the required fields
+        const missingFields = requiredColumns.filter(col => !row[col] || !row[col].trim())
+        if (missingFields.length > 0) {
+          throw new Error(`Row ${index + 2} is missing required fields: ${missingFields.join(', ')}`)
+        }
+        
+        return row
+      })
+      
+      if (csvData.length === 0) {
+        throw new Error('CSV file appears to be empty or contains no valid data rows')
+      }
+      
+      console.log(`Parsed ${csvData.length} rows from CSV:`, csvData.slice(0, 2)) // Log first 2 rows for debugging
+
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        throw new Error('User not authenticated')
       }
 
-      // Upload to our API endpoint (to be created)
-      const response = await fetch('/api/csv/upload', {
+      // Send to Inngest bulk processing endpoint
+      const response = await fetch('/api/bulk-csv-process', {
         method: 'POST',
-        body: formData
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          csvData,
+          aspectRatio: '1:1',
+          batchSize: 5,
+          userId: user.id
+        })
       })
 
       if (!response.ok) {
-        try {
-          const errorData = await response.json()
-          throw new Error(errorData.error || 'Upload failed')
-        } catch (parseError) {
-          const errorText = await response.text()
-          throw new Error(errorText || 'Upload failed')
-        }
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to start bulk processing')
       }
 
       const result = await response.json()
-      console.log('Upload successful:', result)
+      console.log('Bulk processing started:', result)
 
-      // Refresh batches to show the new upload
+      // Refresh batches to show the new job
       await fetchBatches()
 
       // Show success message
       setError(null)
+      setSuccessMessage(`Bulk processing job started! Job ID: ${result.jobId}`)
+      
+      // Clear success message after 10 seconds
+      setTimeout(() => setSuccessMessage(null), 10000)
     } catch (err) {
       console.error('Upload error:', err)
       setError(err instanceof Error ? err.message : 'Upload failed')
@@ -158,29 +207,29 @@ export default function BulkGenerator({ isAuthenticated }: BulkGeneratorProps) {
 
   const handleDownloadTemplate = async (templateId: string) => {
     try {
-      // Increment download count
-      await supabase.rpc('increment_template_download', { p_template_id: templateId })
+      // Create a simple CSV template with required columns
+      const templateContent = [
+        'country,product_type,mpn,size',
+        'France,Widget,ABC123,Large',
+        'Germany,Gadget,XYZ456,Medium',
+        'Spain,Tool,DEF789,Small'
+      ].join('\n')
       
-      // Download template file
-      const response = await fetch(`/api/csv/templates/${templateId}/download`)
-      if (!response.ok) throw new Error('Download failed')
-
-      const blob = await response.blob()
+      // Create and download the file
+      const blob = new Blob([templateContent], { type: 'text/csv' })
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
-      
-      // Get template name for filename
-      const template = templates.find(t => t.id === templateId)
-      link.download = template ? `${template.name.replace(/\s+/g, '_')}_template.csv` : 'template.csv'
+      link.download = 'bulk_generation_template.csv'
       
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
       window.URL.revokeObjectURL(url)
 
-      // Refresh templates to update download count
-      await fetchTemplates()
+      // Show success message
+      setSuccessMessage('Template downloaded successfully!')
+      setTimeout(() => setSuccessMessage(null), 3000)
     } catch (err) {
       console.error('Download error:', err)
       setError('Failed to download template')
@@ -188,46 +237,9 @@ export default function BulkGenerator({ isAuthenticated }: BulkGeneratorProps) {
   }
 
   const handleUploadTemplate = async (file: File) => {
-    if (!isAuthenticated) {
-      setError('Please sign in to upload templates')
-      return
-    }
-
-    setError(null)
-    setSuccessMessage(null)
-
-    try {
-      // Create FormData for template upload
-      const formData = new FormData()
-      formData.append('file', file)
-
-      // Upload to our API endpoint (to be created)
-      const response = await fetch('/api/csv/templates/upload', {
-        method: 'POST',
-        body: formData
-      })
-
-      if (!response.ok) {
-        const errorText = await response.text()
-        throw new Error(errorText || 'Template upload failed')
-      }
-
-      const result = await response.json()
-      console.log('Template upload successful:', result)
-
-      // Refresh templates to show the new template
-      await fetchTemplates()
-
-      // Show success message
-      setError(null)
-      setSuccessMessage(`Template "${result.template.name}" uploaded successfully!`)
-      
-      // Clear success message after 5 seconds
-      setTimeout(() => setSuccessMessage(null), 5000)
-    } catch (err) {
-      console.error('Template upload error:', err)
-      setError(err instanceof Error ? err.message : 'Template upload failed')
-    }
+    // For now, just show a message that template upload is not needed
+    setSuccessMessage('Template upload is not needed! Simply ensure your CSV has columns: country, product_type, mpn, size')
+    setTimeout(() => setSuccessMessage(null), 5000)
   }
 
   if (!isAuthenticated) {

@@ -1,5 +1,5 @@
 import { createClient } from '@/utils/supabase/server'
-import Library from '@/components/library/Library'
+import EnhancedLibrary from '@/components/library/EnhancedLibrary'
 import AppLayout from '@/components/shared/AppLayout'
 
 export default async function LibraryPage() {
@@ -10,16 +10,13 @@ export default async function LibraryPage() {
 
   return (
     <AppLayout>
-      <div className="p-6">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-foreground mb-2">
-            Image Library
-          </h1>
-          <p className="text-muted-foreground">
-            {user ? 'Your generated images and campaigns' : 'Browse our collection of AI-generated images'}
+      <div className="flex flex-col h-full">
+        <div className="px-6 py-4 bg-white border-b border-gray-200">
+          <p className="text-muted-foreground text-sm">
+            {user ? 'Your AI-generated images and campaigns' : 'Browse our collection of AI-generated images'}
           </p>
           {!user && (
-            <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
               <p className="text-sm text-blue-800">
                 💡 Want to create your own images?{' '}
                 <a href="/auth/login" className="font-medium underline hover:no-underline">
@@ -30,7 +27,7 @@ export default async function LibraryPage() {
           )}
         </div>
         
-        <Library isPublic={!user} />
+        <EnhancedLibrary isPublic={!user} />
       </div>
     </AppLayout>
   )

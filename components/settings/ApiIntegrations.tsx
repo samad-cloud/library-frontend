@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { createClient } from "@/utils/supabase/client"
+// import { useAuth } from '@/contexts/AuthContext' // Temporarily disabled
 
 interface ApiIntegrationsProps {
   setShowJiraModal: (show: boolean) => void
@@ -12,6 +13,7 @@ export default function ApiIntegrations({ setShowJiraModal }: ApiIntegrationsPro
   const [isJiraConnected, setIsJiraConnected] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [disconnectError, setDisconnectError] = useState<string | null>(null)
+  // const { user } = useAuth() // Temporarily disabled
 
   useEffect(() => {
     const checkJiraConnection = async () => {
@@ -29,7 +31,13 @@ export default function ApiIntegrations({ setShowJiraModal }: ApiIntegrationsPro
           .single()
 
         if (error) {
-          console.error('Error checking Jira connection:', error)
+          // PGRST116 means no rows found, which is expected when Jira is not connected
+          if (error.code === 'PGRST116') {
+            setIsJiraConnected(false)
+          } else {
+            // Only log actual errors, not "no rows found"
+            console.error('Error checking Jira connection:', error)
+          }
           return
         }
 

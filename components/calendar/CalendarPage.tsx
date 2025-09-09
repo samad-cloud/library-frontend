@@ -4,8 +4,8 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/utils/supabase/client'
 import Calendar from './Calendar'
 import { CalendarEvent as CalendarEventType } from './types'
-import { EventDetailsModal } from './EventDetailsModal'
-import { EditEventModal } from './EditEventModal'
+import { EnhancedEventDetailsModal } from './EnhancedEventDetailsModal'
+import { EnhancedEditEventModal } from './EnhancedEditEventModal'
 import { Button } from '@/components/ui/button'
 import { 
   DropdownMenu,
@@ -13,7 +13,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { RefreshCw, Trash2, ChevronDown } from 'lucide-react'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { RefreshCw, Trash2, ChevronDown, Calendar as CalendarIcon } from 'lucide-react'
 
 interface DatabaseEvent {
   id: string
@@ -75,6 +82,11 @@ export default function CalendarPage({ isAuthenticated }: CalendarPageProps) {
   const [hasJiraIntegration, setHasJiraIntegration] = useState(false)
   const [isCleaningDuplicates, setIsCleaningDuplicates] = useState(false)
   const [isForceSync, setIsForceSync] = useState(false)
+  const [visibleCalendars, setVisibleCalendars] = useState<string[]>([])
+  const [filteredEvents, setFilteredEvents] = useState<CalendarEventType[]>([])
+  const [availableCalendars, setAvailableCalendars] = useState<any[]>([])
+  const [loadingCalendars, setLoadingCalendars] = useState(true)
+  const [selectedCalendarId, setSelectedCalendarId] = useState<string | null>(null)
   const supabase = createClient()
 
   // Handle event click
@@ -87,6 +99,17 @@ export default function CalendarPage({ isAuthenticated }: CalendarPageProps) {
   const handleEditEvent = (event: CalendarEventType) => {
     setEditEvent(event)
     setEditModalOpen(true)
+  }
+
+  // Handle calendar visibility toggle
+  const handleCalendarToggle = (calendarId: string, visible: boolean) => {
+    setVisibleCalendars(prev => {
+      if (visible) {
+        return [...prev, calendarId]
+      } else {
+        return prev.filter(id => id !== calendarId)
+      }
+    })
   }
 
   // Update event function
@@ -181,7 +204,13 @@ export default function CalendarPage({ isAuthenticated }: CalendarPageProps) {
 
     try {
       setLoading(true)
-      const response = await fetch('/api/events')
+      // Build URL with calendar filter if selected
+      let url = '/api/events'
+      if (selectedCalendarId) {
+        url += `?calendar_id=${selectedCalendarId}`
+      }
+      
+      const response = await fetch(url)
       
       if (!response.ok) {
         throw new Error('Failed to fetch events')
@@ -209,11 +238,19 @@ export default function CalendarPage({ isAuthenticated }: CalendarPageProps) {
           color: event.color || getEventColor(event.status, event.calendars.provider),
           allDay: isAllDay,
           // Add database event data for the modal
-          databaseEvent: event
+          databaseEvent: event,
+          // Add images data
+          images: event.images || []
         }
       })
 
       setEvents(calendarEvents)
+      
+      // Initialize visible calendars if not set
+      if (visibleCalendars.length === 0 && dbEvents.length > 0) {
+        const uniqueCalendarIds: string[] = [...new Set(dbEvents.map((e: DatabaseEvent) => e.calendar_id))]
+        setVisibleCalendars(uniqueCalendarIds)
+      }
     } catch (err) {
       console.error('Error loading events:', err)
       setError('Failed to load calendar events')
@@ -221,6 +258,33 @@ export default function CalendarPage({ isAuthenticated }: CalendarPageProps) {
       setLoading(false)
     }
   }
+
+  // Filter events based on selected calendar
+  useEffect(() => {
+    if (!selectedCalendarId) {
+      // If no calendar selected, show events from visible calendars
+      if (visibleCalendars.length === 0) {
+        setFilteredEvents(events)
+      } else {
+        const filtered = events.filter(event => {
+          if (event.databaseEvent && 'calendar_id' in event.databaseEvent) {
+            return visibleCalendars.includes(event.databaseEvent.calendar_id)
+          }
+          return true
+        })
+        setFilteredEvents(filtered)
+      }
+    } else {
+      // Show only events from the selected calendar
+      const filtered = events.filter(event => {
+        if (event.databaseEvent && 'calendar_id' in event.databaseEvent) {
+          return event.databaseEvent.calendar_id === selectedCalendarId
+        }
+        return false
+      })
+      setFilteredEvents(filtered)
+    }
+  }, [events, selectedCalendarId, visibleCalendars])
 
   // Sync events from Jira
   const syncJiraEvents = async (forceFullSync = false) => {
@@ -354,24 +418,6 @@ export default function CalendarPage({ isAuthenticated }: CalendarPageProps) {
     }
   }
 
-  // Get color based on event status and provider
-  const getEventColor = (status: string, provider: string): string => {
-    if (provider === 'JIRA') {
-      switch (status) {
-        case 'pending':
-          return 'amber'
-        case 'processing':
-          return 'violet'
-        case 'completed':
-          return 'emerald'
-        case 'failed':
-          return 'rose'
-        default:
-          return 'sky'
-      }
-    }
-    return 'sky'
-  }
 
   // Update event status
   const updateEventStatus = async (eventId: string, status: string) => {
@@ -399,14 +445,90 @@ export default function CalendarPage({ isAuthenticated }: CalendarPageProps) {
     }
   }
 
+  // Load available calendars
+  const loadCalendars = async () => {
+    try {
+      setLoadingCalendars(true)
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.user) {
+        setLoadingCalendars(false)
+        return
+      }
+
+      const { data, error } = await supabase
+        .from('calendars')
+        .select('*')
+        .eq('user_id', session.user.id)
+
+      if (error) {
+        console.error('Error loading calendars:', error)
+      } else {
+        const calendars = data || []
+        setAvailableCalendars(calendars)
+        // Set the first calendar as selected if none is selected
+        if (calendars.length > 0 && !selectedCalendarId) {
+          setSelectedCalendarId(calendars[0].id)
+        }
+      }
+    } finally {
+      setLoadingCalendars(false)
+    }
+  }
+
+  // Listen for calendar visibility changes from localStorage
+  useEffect(() => {
+    // Load calendars
+    loadCalendars()
+
+    // Load initial visible calendars from localStorage
+    const stored = localStorage.getItem('visibleCalendars')
+    if (stored) {
+      try {
+        const calendarIds = JSON.parse(stored)
+        setVisibleCalendars(calendarIds)
+      } catch (error) {
+        console.error('Error parsing visible calendars:', error)
+      }
+    }
+
+    // Listen for storage events (cross-tab and same-tab)
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'visibleCalendars' && e.newValue) {
+        try {
+          const calendarIds = JSON.parse(e.newValue)
+          setVisibleCalendars(calendarIds)
+        } catch (error) {
+          console.error('Error parsing visible calendars:', error)
+        }
+      } else if (e.key === 'calendarsUpdated') {
+        // Reload calendars when they are updated
+        loadCalendars()
+      }
+    }
+
+    window.addEventListener('storage', handleStorageChange)
+    return () => window.removeEventListener('storage', handleStorageChange)
+  }, [])
+
   // Load events and check integration on component mount
   useEffect(() => {
     loadEvents()
     checkJiraIntegration()
   }, [isAuthenticated])
 
+  // Reload events when selected calendar changes
+  useEffect(() => {
+    if (isAuthenticated && selectedCalendarId) {
+      loadEvents()
+    }
+  }, [selectedCalendarId])
+
   // Custom event creation for database integration
   const createEvent = async (event: CalendarEventType) => {
+    if (!selectedCalendarId) {
+      console.error('No calendar selected')
+      throw new Error('Please select a calendar first')
+    }
     try {
       console.log('Creating event with data:', event)
       
@@ -420,7 +542,8 @@ export default function CalendarPage({ isAuthenticated }: CalendarPageProps) {
         color: event.color,
         allDay: event.allDay,
         styles: event.styles || [],
-        numberOfVariations: event.number_of_variations || 1
+        numberOfVariations: event.number_of_variations || 1,
+        calendarId: selectedCalendarId
       }
 
       const response = await fetch('/api/events', {
@@ -490,6 +613,44 @@ export default function CalendarPage({ isAuthenticated }: CalendarPageProps) {
 
   return (
     <div className="space-y-4">
+      {/* Calendar Selector */}
+      {isAuthenticated && availableCalendars.length > 0 && (
+        <div className="bg-white rounded-lg shadow-sm border p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <CalendarIcon className="w-5 h-5 text-gray-600" />
+                <label htmlFor="calendar-select" className="text-sm font-medium text-gray-900">
+                  Active Calendar:
+                </label>
+              </div>
+              <Select 
+                value={selectedCalendarId || undefined}
+                onValueChange={setSelectedCalendarId}
+              >
+                <SelectTrigger id="calendar-select" className="w-[250px]">
+                  <SelectValue placeholder="Select a calendar" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableCalendars.map((calendar) => (
+                    <SelectItem key={calendar.id} value={calendar.id}>
+                      <div className="flex items-center gap-2">
+                        <span>{calendar.provider === 'JIRA' ? '🎯' : calendar.provider === 'MANUAL' ? '💾' : '📅'}</span>
+                        <span>{calendar.name}</span>
+                        <span className="text-xs text-gray-500">({calendar.provider})</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="text-sm text-gray-500">
+              Events will be added to this calendar
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Sync section */}
       {isAuthenticated && hasJiraIntegration && (
         <div className="bg-white rounded-lg shadow-sm border p-4">
@@ -576,16 +737,41 @@ export default function CalendarPage({ isAuthenticated }: CalendarPageProps) {
         </div>
       )}
 
+      {/* Show message if no calendars exist */}
+      {!loadingCalendars && availableCalendars.length === 0 && (
+        <div className="bg-amber-50 border border-amber-200 rounded-lg p-6 mb-4">
+          <div className="flex items-start">
+            <svg className="w-5 h-5 text-amber-400 mr-3 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+            </svg>
+            <div>
+              <h3 className="text-sm font-medium text-amber-800">No Calendars Available</h3>
+              <p className="mt-1 text-sm text-amber-700">
+                You need to create a calendar before you can add events. 
+                Use the sidebar to create a local calendar or connect an external calendar.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Calendar component with database events */}
       <Calendar 
-        initialEvents={events}
+        initialEvents={filteredEvents}
         onCreateEvent={createEvent}
         onEventClick={handleEventClick}
-        showCreateButton={isAuthenticated}
+        showCreateButton={isAuthenticated && availableCalendars.length > 0}
       />
 
+      {/* Show selected calendar info in the calendar */}
+      {selectedCalendarId && availableCalendars.length > 0 && (
+        <div className="mt-2 text-center text-sm text-gray-500">
+          Viewing calendar: <strong>{availableCalendars.find(c => c.id === selectedCalendarId)?.name}</strong>
+        </div>
+      )}
+
       {/* Event Details Modal */}
-      <EventDetailsModal
+      <EnhancedEventDetailsModal
         open={eventDetailsOpen}
         onOpenChange={setEventDetailsOpen}
         event={selectedEvent}
@@ -593,7 +779,7 @@ export default function CalendarPage({ isAuthenticated }: CalendarPageProps) {
       />
 
       {/* Edit Event Modal */}
-      <EditEventModal
+      <EnhancedEditEventModal
         open={editModalOpen}
         onOpenChange={setEditModalOpen}
         event={editEvent}

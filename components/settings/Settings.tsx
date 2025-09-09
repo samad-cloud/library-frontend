@@ -4,10 +4,12 @@ import { useState, useEffect } from 'react'
 import { LogOut, Save } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { useRouter } from 'next/navigation'
+// import { useAuth } from '@/contexts/AuthContext' // Temporarily disabled
 import { Button } from "@/components/ui/button"
 import TechPreferences from './TechPreferences'
 import CreativePreferences from './CreativePreferences'
 import ApiIntegrations from './ApiIntegrations'
+import WorkingHoursSettings from './WorkingHoursSettings'
 import JiraModal from '@/components/modals/JiraModal'
 import { UserPreferences, StyleType } from '@/types/preferences'
 
@@ -27,8 +29,9 @@ export default function Settings() {
 
   const router = useRouter()
   const supabase = createClient()
+  // const { user, signOut } = useAuth() // Temporarily disabled
 
-  // Load existing preferences on component mount
+  // Load existing preferences when user is available
   useEffect(() => {
     loadUserPreferences()
   }, [])
@@ -57,6 +60,12 @@ export default function Settings() {
           trigger_timing: data.trigger_timing,
           styles: data.styles,
           number_of_variations: data.number_of_variations,
+          working_hours_start: data.working_hours_start,
+          working_hours_end: data.working_hours_end,
+          working_days: data.working_days,
+          timezone: data.timezone,
+          highlight_working_hours: data.highlight_working_hours,
+          custom_schedule: data.custom_schedule,
           created_at: data.created_at,
           updated_at: data.updated_at,
         })
@@ -83,11 +92,18 @@ export default function Settings() {
         trigger_timing: preferences.trigger_timing,
         styles: preferences.styles,
         number_of_variations: preferences.number_of_variations,
+        working_hours_start: preferences.working_hours_start,
+        working_hours_end: preferences.working_hours_end,
+        working_days: preferences.working_days,
+        timezone: preferences.timezone,
+        highlight_working_hours: preferences.highlight_working_hours,
+        custom_schedule: preferences.custom_schedule,
       }
 
       const { data, error } = await supabase
         .from('user_preferences')
         .upsert(preferencesData, { 
+          onConflict: 'user_id',
           ignoreDuplicates: false 
         })
         .select()
@@ -203,6 +219,14 @@ export default function Settings() {
           numberOfVariations={preferences.number_of_variations}
           onNumberOfVariationsChange={(count) => updatePreferences({ number_of_variations: count })}
         />
+        <WorkingHoursSettings
+          preferences={preferences}
+          updatePreferences={updatePreferences}
+        />
+        
+        {/* Add spacing between sections */}
+        <div className="mt-6" />
+        
         <ApiIntegrations setShowJiraModal={setShowJiraModal} />
       </div>
 

@@ -1,0 +1,156 @@
+/* Responsive Navigation Styles */
+
+:root {
+  --nav-width: 16rem; /* 256px */
+  --nav-mobile-width: 280px;
+  --header-height: 64px;
+  --nav-transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Desktop Navigation */
+@media (min-width: 1024px) {
+  .nav-sidebar {
+    width: var(--nav-width);
+    transition: var(--nav-transition);
+  }
+
+  .nav-content {
+    margin-left: var(--nav-width);
+    transition: var(--nav-transition);
+  }
+}
+
+/* Mobile Navigation */
+@media (max-width: 1023px) {
+  .nav-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 50;
+    height: 100vh;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease-in-out;
+  }
+
+  .nav-sidebar.open {
+    transform: translateX(0);
+  }
+
+  .nav-content {
+    margin-left: 0;
+    padding-top: var(--header-height);
+  }
+}
+
+/* Navigation Items */
+.nav-item {
+  position: relative;
+  transition: var(--nav-transition);
+}
+
+.nav-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 0;
+  background: rgb(236, 72, 153);
+  transition: height 0.2s ease;
+}
+
+.nav-item.active::before {
+  height: 100%;
+}
+
+/* Keyboard Focus Styles */
+.nav-item:focus-visible {
+  outline: 2px solid rgb(236, 72, 153);
+  outline-offset: 2px;
+}
+
+/* Mobile Menu Animation */
+@keyframes slideIn {
+  from {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideOut {
+  from {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+}
+
+.sheet-slide-in {
+  animation: slideIn 0.3s ease-out forwards;
+}
+
+.sheet-slide-out {
+  animation: slideOut 0.3s ease-in forwards;
+}
+
+/* Smooth Scrolling for Navigation */
+.nav-scroll {
+  scroll-behavior: smooth;
+  overscroll-behavior: contain;
+}
+
+/* Touch-friendly tap targets on mobile */
+@media (max-width: 640px) {
+  .nav-item {
+    min-height: 48px;
+  }
+  
+  .nav-item a {
+    padding: 12px 16px;
+  }
+}
+
+/* Reduced Motion Support */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Dark Mode Support (if using next-themes) */
+.dark .nav-sidebar {
+  background-color: rgb(24, 24, 27);
+  border-color: rgb(39, 39, 42);
+}
+
+.dark .nav-item:not(.active):hover {
+  background-color: rgb(39, 39, 42);
+}
+
+.dark .nav-item.active {
+  background-color: rgb(236, 72, 153);
+}
+
+/* Print Styles */
+@media print {
+  .nav-sidebar,
+  .mobile-nav-header {
+    display: none;
+  }
+  
+  .nav-content {
+    margin-left: 0;
+  }
+}

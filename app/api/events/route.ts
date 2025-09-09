@@ -17,25 +17,54 @@ export async function POST(request: NextRequest) {
 
     console.log('✅ User authenticated:', user.id)
 
-    // Get the first available calendar for this user (current calendar)
-    console.log('📅 Finding current calendar for user...')
-    const { data: existingCalendars, error: calendarSelectError } = await supabase
-      .from('calendars')
-      .select('id, name, provider')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: true })
-      .limit(1)
+    // Use the calendarId provided in the request, or fall back to first available
+    let calendarId = eventData.calendarId
+    let inheritedDepartment = 'email_marketing' // default
+    
+    if (!calendarId) {
+      // Fall back to first available calendar for backwards compatibility
+      console.log('📅 No calendar ID provided, finding first available calendar...')
+      const { data: existingCalendars, error: calendarSelectError } = await supabase
+        .from('calendars')
+        .select('id, name, provider, department')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: true })
+        .limit(1)
 
-    if (calendarSelectError || !existingCalendars || existingCalendars.length === 0) {
-      console.error('❌ No calendar found for user. User needs to set up a calendar first.')
-      return NextResponse.json({ 
-        error: 'No calendar found', 
-        details: 'Please set up a calendar integration (like Jira) before creating events'
-      }, { status: 400 })
+      if (calendarSelectError || !existingCalendars || existingCalendars.length === 0) {
+        console.error('❌ No calendar found for user. User needs to set up a calendar first.')
+        return NextResponse.json({ 
+          error: 'No calendar found', 
+          details: 'Please set up a calendar integration before creating events'
+        }, { status: 400 })
+      }
+
+      const firstCalendar = existingCalendars[0]
+      calendarId = firstCalendar.id
+      inheritedDepartment = firstCalendar.department || 'email_marketing'
+      console.log('✅ Using first calendar:', calendarId, 'Name:', firstCalendar.name, 'Provider:', firstCalendar.provider, 'Department:', inheritedDepartment)
+    } else {
+      // Verify the calendar belongs to the user and get department
+      const { data: calendar, error: verifyError } = await supabase
+        .from('calendars')
+        .select('id, name, provider, department')
+        .eq('id', calendarId)
+        .eq('user_id', user.id)
+        .single()
+
+      if (verifyError || !calendar) {
+        console.error('❌ Calendar not found or unauthorized:', calendarId)
+        return NextResponse.json({ 
+          error: 'Invalid calendar', 
+          details: 'The selected calendar does not exist or you do not have access to it'
+        }, { status: 403 })
+      }
+      
+      inheritedDepartment = calendar.department || 'email_marketing'
+      console.log('✅ Using selected calendar:', calendarId, 'Name:', calendar.name, 'Provider:', calendar.provider, 'Department:', inheritedDepartment)
     }
 
-    const calendarId = existingCalendars[0].id
-    console.log('✅ Using current calendar:', calendarId, 'Name:', existingCalendars[0].name, 'Provider:', existingCalendars[0].provider)
+    console.log('📋 Event will inherit department from calendar:', inheritedDepartment)
 
     // Prepare event data for database insertion
     const dbEvent = {
@@ -57,7 +86,8 @@ export async function POST(request: NextRequest) {
       tags: [],
       styles: eventData.styles || [],
       number_of_variations: eventData.numberOfVariations || 1,
-      color: eventData.color || 'amber'
+      color: eventData.color || 'amber',
+      department: eventData.department || inheritedDepartment // Inherit from calendar or default
     }
 
     console.log('💾 Inserting event into database...')
@@ -118,7 +148,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Build query
+    // Build query with images join
     let query = supabase
       .from('calendar_events')
       .select(`
@@ -127,6 +157,15 @@ export async function GET(request: NextRequest) {
           id,
           name,
           provider
+        ),
+        images(
+          id,
+          storage_url,
+          thumb_url,
+          title,
+          created_at,
+          model_name,
+          generation_source
         )
       `)
       .eq('user_id', user.id)
@@ -186,6 +225,7 @@ export async function PUT(request: NextRequest) {
       color: eventData.color || 'amber',
       styles: eventData.styles || [],
       number_of_variations: eventData.numberOfVariations || 1,
+      department: eventData.department, // Keep existing department unless explicitly changed
       raw_data: {
         ...eventData.originalRawData,
         created_manually: true,

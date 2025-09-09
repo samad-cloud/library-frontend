@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run lint:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npm run build:*)",
+      "Read(//c/Users/Admin3k/Documents/CustomImageGEN/**)",
+      "Bash(npm install:*)",
+      "Bash(npm run dev:*)",
+      "Bash(curl:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

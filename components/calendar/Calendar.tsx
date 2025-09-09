@@ -19,13 +19,15 @@ import {
 } from "date-fns";
 
 import { CalendarHeader } from "./CalendarHeader";
-import { DayView } from "./DayView";
+import { ImprovedDayView } from "./ImprovedDayView";
 import { WeekView } from "./WeekView";
 import { MonthView } from "./MonthView";
 import { YearView } from "./YearView";  
-import { CreateEventModal } from "./CreateEventModal";
+import { EnhancedCreateEventModal } from "./EnhancedCreateEventModal";
 import { CalendarEvent, CalendarView } from "./types";
 import { uid, eventsForDate } from "./utils";
+import { createClient } from "@/utils/supabase/client";
+import { UserPreferences } from "@/types/preferences";
 
 interface EventCalendarAppProps {
   initialEvents?: CalendarEvent[]
@@ -44,6 +46,9 @@ export default function EventCalendarApp({
   const [cursor, setCursor] = useState<Date>(new Date());
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [isModalOpen, setModalOpen] = useState(false);
+  const [selectedTime, setSelectedTime] = useState<Date | null>(null);
+  const [userPreferences, setUserPreferences] = useState<UserPreferences | null>(null);
+  const supabase = createClient();
 
   // Load initial events
   useEffect(() => {
@@ -51,6 +56,35 @@ export default function EventCalendarApp({
       setEvents(initialEvents)
     }
   }, [initialEvents])
+
+  // Load user preferences for working hours
+  useEffect(() => {
+    loadUserPreferences();
+  }, []);
+
+  const loadUserPreferences = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) return;
+
+      const { data, error } = await supabase
+        .from('user_preferences')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .single();
+
+      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found
+        console.error('Error loading preferences:', error);
+        return;
+      }
+
+      if (data) {
+        setUserPreferences(data);
+      }
+    } catch (error) {
+      console.error('Error loading user preferences:', error);
+    }
+  };
 
   const startOfWeekDate = useMemo(() => startOfWeek(cursor, { weekStartsOn: 1 }), [cursor]);
   const endOfWeekDate = useMemo(() => endOfWeek(cursor, { weekStartsOn: 1 }), [cursor]);
@@ -114,7 +148,17 @@ export default function EventCalendarApp({
                 exit={{ opacity: 0, y: -8 }}
                 className="p-4 md:p-6"
               >
-                <DayView date={cursor} events={eventsForDate(cursor, events)} onEventClick={onEventClick} />
+                <ImprovedDayView 
+                  date={cursor} 
+                  events={eventsForDate(cursor, events)} 
+                  onEventClick={onEventClick}
+                  onCreateEvent={showCreateButton ? (time) => {
+                    // Store the selected time and open the modal
+                    setSelectedTime(time);
+                    setModalOpen(true);
+                  } : undefined}
+                  userPreferences={userPreferences}
+                />
               </motion.div>
             )}
             {view === "week" && (
@@ -166,11 +210,18 @@ export default function EventCalendarApp({
           </AnimatePresence>
         </div>
 
-        <CreateEventModal
+        <EnhancedCreateEventModal
           open={isModalOpen}
-          onOpenChange={setModalOpen}
+          onOpenChange={(open) => {
+            setModalOpen(open);
+            // Reset selected time when modal closes
+            if (!open) {
+              setSelectedTime(null);
+            }
+          }}
           onCreate={createEvent}
           baseDate={cursor}
+          initialTime={selectedTime}
         />
       </div>
     </div>

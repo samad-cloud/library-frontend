@@ -1,6 +1,10 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+// Simple in-memory cache for auth results (per-request lifecycle)
+const authCache = new Map<string, { user: any; timestamp: number }>()
+const CACHE_DURATION = 30 * 1000 // 30 seconds
+
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
     request,
@@ -27,30 +31,61 @@ export async function updateSession(request: NextRequest) {
     }
   )
 
-  // Do not run code between createServerClient and
-  // supabase.auth.getUser(). A simple mistake could make it very hard to debug
-  // issues with users being randomly logged out.
+  // Get session token for cache key
+  const sessionToken = request.cookies.get('sb-access-token')?.value || 
+                      request.cookies.get('sb-refresh-token')?.value || 
+                      'anonymous'
+  
+  const cacheKey = `${sessionToken}-${request.nextUrl.pathname}`
+  const cached = authCache.get(cacheKey)
+  
+  let user: any = null
 
-  // IMPORTANT: DO NOT REMOVE auth.getUser()
+  // Use cached result if available and not expired
+  if (cached && (Date.now() - cached.timestamp) < CACHE_DURATION) {
+    user = cached.user
+  } else {
+    // Only make auth request if not cached or expired
+    const {
+      data: { user: fetchedUser },
+    } = await supabase.auth.getUser()
+    
+    user = fetchedUser
+    
+    // Cache the result
+    authCache.set(cacheKey, {
+      user,
+      timestamp: Date.now()
+    })
+    
+    // Clean up old cache entries (keep cache size manageable)
+    if (authCache.size > 100) {
+      const oldestKeys = Array.from(authCache.keys()).slice(0, 50)
+      oldestKeys.forEach(key => authCache.delete(key))
+    }
+  }
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  // Define public API routes that don't require authentication
-  const publicApiRoutes = ['/api/echo']
-  const isPublicApiRoute = publicApiRoutes.some(route => 
+  // Define public routes that don't require authentication
+  const publicRoutes = [
+    '/api/echo',
+    '/api/inngest', // Inngest webhook endpoint
+    '/auth',
+    '/login',
+    '/library', // Library is public
+    '/', // Home page
+  ]
+  
+  const isPublicRoute = publicRoutes.some(route => 
     request.nextUrl.pathname.startsWith(route)
   )
 
-  // Check if user is authenticated
-  if (
-    !user &&
-    !request.nextUrl.pathname.startsWith('/login') &&
-    !request.nextUrl.pathname.startsWith('/auth') &&
-    !request.nextUrl.pathname.startsWith('/library') &&
-    !isPublicApiRoute
-  ) {
+  // Early exit for public routes - no need to check authentication
+  if (isPublicRoute) {
+    return supabaseResponse
+  }
+
+  // Check if user is authenticated for protected routes
+  if (!user) {
     // no user, potentially respond by redirecting the user to the login page
     const url = request.nextUrl.clone()
     url.pathname = '/auth/login'

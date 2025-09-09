@@ -744,8 +744,9 @@ export default function Component() {
                           <div className="aspect-square bg-gray-100 relative overflow-hidden">
                             <img
                               src={image.url || "/placeholder.svg"}
-                              alt={image.alt}
+                              alt={image.alt || `${image.name} - Generated on ${image.generatedDate}`}
                               className="w-full h-full object-cover"
+                              loading="lazy"
                             />
 
                             {/* Expand Icon - only show when not in select mode */}
@@ -787,7 +788,7 @@ export default function Component() {
 
                     <img
                       src={selectedImageForPreview.url || "/placeholder.svg"}
-                      alt={selectedImageForPreview.alt}
+                      alt={selectedImageForPreview.alt || `${selectedImageForPreview.name} - Full size preview`}
                       className="max-w-full max-h-[90vh] object-contain rounded-lg"
                     />
 

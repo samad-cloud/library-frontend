@@ -18,11 +18,18 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Build query
+    // Build query with minimal fields to reduce egress
     let query = supabase
       .from('calendar_events')
       .select(`
-        *,
+        id,
+        external_event_id,
+        summary,
+        due_date,
+        status,
+        trigger_start,
+        trigger_end,
+        department,
         calendars!inner(
           id,
           name,
@@ -31,6 +38,7 @@ export async function GET(request: NextRequest) {
       `)
       .eq('user_id', user.id)
       .order('due_date', { ascending: true })
+      .limit(100) // Limit to 100 events
 
     // Apply filters
     if (startDate) {
