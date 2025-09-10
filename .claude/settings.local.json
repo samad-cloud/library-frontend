@@ -7,7 +7,9 @@
       "Read(//c/Users/Admin3k/Documents/CustomImageGEN/**)",
       "Bash(npm install:*)",
       "Bash(npm run dev:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(dir:*)",
+      "Bash(del nul)"
     ],
     "deny": [],
     "ask": []

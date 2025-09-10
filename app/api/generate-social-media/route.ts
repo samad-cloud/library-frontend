@@ -23,7 +23,7 @@ const SocialMediaEnhancedPromptSchema = z.object({
   shot_type: z.enum(['wide shot', 'medium shot', 'close up']).describe('Camera shot type'),
   composition: z.string().describe('2-5 words of framing advice'),
   colour_palette: z.string().describe('3-4 descriptive colour words matching country décor trends'),
-  aspect_ratio: z.enum(['1:1', '4:5']).describe('Aspect ratio for social media')
+  aspect_ratio: z.string().describe('Aspect ratio for social media')
 })
 
 type SocialMediaEnhancedPrompt = z.infer<typeof SocialMediaEnhancedPromptSchema>
@@ -33,6 +33,7 @@ interface SocialMediaGenerationRequest {
   selectedModels?: string[]
   enhanceOnly?: boolean
   skipEnhancement?: boolean
+  aspectRatio?: string
 }
 
 interface ModelResult {
@@ -156,7 +157,7 @@ async function convertImagesToDataUrls(imageBuffers: Buffer[], modelName: string
   return dataUrls
 }
 
-async function generateSocialMediaContent(userPrompt: string, selectedModels?: string[], enhanceOnly?: boolean, skipEnhancement?: boolean): Promise<SocialMediaResult> {
+async function generateSocialMediaContent(userPrompt: string, selectedModels?: string[], enhanceOnly?: boolean, skipEnhancement?: boolean, aspectRatio?: string): Promise<SocialMediaResult> {
   console.log('[SOCIAL-MEDIA] Starting social media content generation...')
   console.log('[SOCIAL-MEDIA] User prompt:', userPrompt)
   
@@ -182,7 +183,7 @@ async function generateSocialMediaContent(userPrompt: string, selectedModels?: s
         shot_type: 'wide shot',
         composition: 'balanced composition',
         colour_palette: 'natural warm tones',
-        aspect_ratio: '1:1'
+        aspect_ratio: aspectRatio || '1:1'
       }
     } else {
       console.log('[SOCIAL-MEDIA] Step 1: Enhancing user prompt for image generation...')
@@ -283,9 +284,16 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       )
     }
+    if (!body.aspectRatio) {
+      return NextResponse.json(
+        { error: 'aspectRatio is required' },
+        { status: 400 }
+      )
+    }
+    
 
     // Generate social media content
-    const result = await generateSocialMediaContent(body.userPrompt, body.selectedModels, body.enhanceOnly, body.skipEnhancement)
+    const result = await generateSocialMediaContent(body.userPrompt, body.selectedModels, body.enhanceOnly, body.skipEnhancement,body.aspectRatio)
 
     return NextResponse.json(result)
 
