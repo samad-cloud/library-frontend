@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
 import { Card, CardContent } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Expand, Loader2, Crop, Edit3 } from 'lucide-react'
+import { Expand, Loader2, Crop, Edit3, Download } from 'lucide-react'
 import { 
   saveToSessionStorage, 
   loadFromSessionStorage, 
@@ -16,6 +16,7 @@ import {
   type SocialMediaGeneratorState 
 } from '@/lib/sessionStorage'
 import SaveImageButton from '@/components/shared/SaveImageButton'
+import DownloadImageButton from '@/components/shared/DownloadImageButton'
 
 interface SocialMediaGeneratorProps {
   isAuthenticated?: boolean
@@ -436,6 +437,17 @@ export default function SocialMediaGenerator({ isAuthenticated }: SocialMediaGen
                         <Edit3 className="w-4 h-4 mr-2" />
                         Edit Image
                       </Button>
+                      <DownloadImageButton
+                        imageUrl={modelResult.imageUrls[0]}
+                        generator="social-media"
+                        modelName={model.name.replace(/\s+/g, '_')}
+                        fileName={`social_media_${model.name.toLowerCase().replace(/\s+/g, '_')}`}
+                        variant="ghost"
+                        size="sm"
+                        className="flex-1 text-orange-500 hover:text-orange-600"
+                      >
+                        Download
+                      </DownloadImageButton>
                     </div>
                     <SaveImageButton
                       imageUrl={modelResult.imageUrls[0]}
@@ -487,6 +499,17 @@ export default function SocialMediaGenerator({ isAuthenticated }: SocialMediaGen
                             >
                               <Edit3 className="w-3 h-3" />
                             </Button>
+                            <DownloadImageButton
+                              imageUrl={url}
+                              generator="social-media"
+                              modelName={model.name.replace(/\s+/g, '_')}
+                              fileName={`social_media_${model.name.toLowerCase().replace(/\s+/g, '_')}_variant_${index + 2}`}
+                              variant="ghost"
+                              size="sm"
+                              className="h-6 w-6 p-0 text-white hover:text-orange-200"
+                            >
+                              <Download className="w-3 h-3" />
+                            </DownloadImageButton>
                           </div>
                         </div>
                         <div className="absolute bottom-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">

@@ -14,6 +14,7 @@ import {
   type GrouponGeneratorState 
 } from '@/lib/sessionStorage'
 import SaveImageButton from '@/components/shared/SaveImageButton'
+import DownloadImageButton from '@/components/shared/DownloadImageButton'
 
 interface GrouponGeneratorProps {
   isAuthenticated?: boolean
@@ -394,6 +395,17 @@ export default function GrouponGenerator({ isAuthenticated }: GrouponGeneratorPr
                               <Edit3 className="w-4 h-4 mr-2" />
                               Edit
                             </Button>
+                            <DownloadImageButton
+                              imageUrl={image.imageUrl}
+                              generator="groupon"
+                              modelName="Imagen_4"
+                              fileName={`groupon_image_${image.index}`}
+                              variant="ghost"
+                              size="sm"
+                              className="flex-1 text-blue-600 hover:text-blue-700"
+                            >
+                              Download
+                            </DownloadImageButton>
                           </div>
                           <SaveImageButton
                             imageUrl={image.imageUrl}

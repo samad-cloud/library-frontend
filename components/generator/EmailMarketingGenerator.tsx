@@ -14,6 +14,7 @@ import {
   type EmailMarketingGeneratorState 
 } from '@/lib/sessionStorage'
 import SaveImageButton from '@/components/shared/SaveImageButton'
+import DownloadImageButton from '@/components/shared/DownloadImageButton'
 
 interface EmailMarketingGeneratorProps {
   isAuthenticated?: boolean
@@ -367,6 +368,17 @@ export default function EmailMarketingGenerator({ isAuthenticated }: EmailMarket
                       <Edit3 className="w-4 h-4 mr-2" />
                       Edit Image
                     </Button>
+                    <DownloadImageButton
+                      imageUrl={generatedImage}
+                      generator="email-marketing"
+                      modelName="Imagen_4"
+                      fileName="email_marketing_image"
+                      variant="ghost"
+                      size="sm"
+                      className="flex-1 text-purple-600 hover:text-purple-700"
+                    >
+                      Download
+                    </DownloadImageButton>
                   </div>
                   <SaveImageButton
                     imageUrl={generatedImage}

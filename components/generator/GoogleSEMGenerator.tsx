@@ -14,6 +14,7 @@ import {
   type GoogleSEMGeneratorState 
 } from '@/lib/sessionStorage'
 import SaveImageButton from '@/components/shared/SaveImageButton'
+import DownloadImageButton from '@/components/shared/DownloadImageButton'
 
 interface GoogleSEMGeneratorProps {
   isAuthenticated?: boolean
@@ -418,6 +419,17 @@ export default function GoogleSEMGenerator({ isAuthenticated }: GoogleSEMGenerat
                           <Edit3 className="w-4 h-4 mr-2" />
                           Edit Image
                         </Button>
+                        <DownloadImageButton
+                          imageUrl={originalImage}
+                          generator="google-sem"
+                          modelName="Imagen_4_Original"
+                          fileName="google_sem_original"
+                          variant="ghost"
+                          size="sm"
+                          className="flex-1 text-purple-600 hover:text-purple-700"
+                        >
+                          Download
+                        </DownloadImageButton>
                       </div>
                       <SaveImageButton
                         imageUrl={originalImage}
@@ -477,6 +489,17 @@ export default function GoogleSEMGenerator({ isAuthenticated }: GoogleSEMGenerat
                           <Edit3 className="w-4 h-4 mr-2" />
                           Edit Image
                         </Button>
+                        <DownloadImageButton
+                          imageUrl={googleAdsImage}
+                          generator="google-sem"
+                          modelName="Imagen_4_GoogleAds"
+                          fileName="google_sem_optimized"
+                          variant="ghost"
+                          size="sm"
+                          className="flex-1 text-orange-600 hover:text-orange-700"
+                        >
+                          Download
+                        </DownloadImageButton>
                       </div>
                       <SaveImageButton
                         imageUrl={googleAdsImage}
