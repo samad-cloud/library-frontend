@@ -84,13 +84,51 @@ export default function CsvUploadSection({
             return
           }
 
-          const headers = lines[0].split(',').map(h => h.trim().replace(/['"]/g, ''))
+          // Proper CSV parsing that handles quoted fields with commas
+          const parseCSVLine = (line: string): string[] => {
+            const result: string[] = []
+            let current = ''
+            let inQuotes = false
+            
+            for (let i = 0; i < line.length; i++) {
+              const char = line[i]
+              
+              if (char === '"') {
+                if (inQuotes && line[i + 1] === '"') {
+                  // Escaped quote
+                  current += '"'
+                  i++ // Skip next quote
+                } else {
+                  // Toggle quote state
+                  inQuotes = !inQuotes
+                }
+              } else if (char === ',' && !inQuotes) {
+                // End of field
+                result.push(current.trim())
+                current = ''
+              } else {
+                current += char
+              }
+            }
+            
+            // Add the last field
+            result.push(current.trim())
+            return result
+          }
+
+          const headers = parseCSVLine(lines[0]).map(h => h.replace(/^"|"$/g, '')) // Remove surrounding quotes
           const dataRows = lines.slice(1, 6) // Preview first 5 rows
           const preview = dataRows.map(row => {
-            const values = row.split(',').map(v => v.trim().replace(/['"]/g, ''))
+            const values = parseCSVLine(row).map(v => v.replace(/^"|"$/g, '')) // Remove surrounding quotes
             const obj: any = {}
             headers.forEach((header, index) => {
-              obj[header] = values[index] || ''
+              const value = values[index]
+              // Convert empty, whitespace-only, or undefined values to NULL
+              if (value === undefined || value === '' || (typeof value === 'string' && value.trim() === '')) {
+                obj[header] = null
+              } else {
+                obj[header] = value
+              }
             })
             return obj
           })
@@ -459,7 +497,13 @@ export default function CsvUploadSection({
             {/* CSV Preview */}
             {validation.preview.length > 0 && (
               <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                <h5 className="font-medium text-gray-800 mb-3">Preview (first 5 rows):</h5>
+                <div className="flex items-center justify-between mb-3">
+                  <h5 className="font-medium text-gray-800">Preview (first 5 rows):</h5>
+                  <div className="text-xs text-gray-600 flex items-center gap-2">
+                    <span className="bg-red-50 text-red-600 px-2 py-1 rounded font-mono">NULL</span>
+                    <span>= Empty values</span>
+                  </div>
+                </div>
                 <div className="overflow-x-auto">
                   <table className="min-w-full text-sm">
                     <thead>
@@ -474,12 +518,22 @@ export default function CsvUploadSection({
                     <tbody>
                       {validation.preview.map((row, index) => (
                         <tr key={index} className="border-b border-gray-200">
-                          {validation.detectedColumns.map(col => (
-                            <td key={col} className="p-2 text-gray-600">
-                              {String(row[col] || '').substring(0, 50)}
-                              {String(row[col] || '').length > 50 ? '...' : ''}
-                            </td>
-                          ))}
+                          {validation.detectedColumns.map(col => {
+                            const value = row[col]
+                            const isNull = value === null
+                            const displayValue = isNull ? 'NULL' : String(value || '')
+                            const truncatedValue = displayValue.length > 50 ? displayValue.substring(0, 50) + '...' : displayValue
+                            
+                            return (
+                              <td key={col} className={`p-2 ${
+                                isNull 
+                                  ? 'text-red-600 bg-red-50 font-mono italic' 
+                                  : 'text-gray-600'
+                              }`}>
+                                {truncatedValue}
+                              </td>
+                            )
+                          })}
                         </tr>
                       ))}
                     </tbody>

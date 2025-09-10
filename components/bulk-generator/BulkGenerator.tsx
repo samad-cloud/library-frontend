@@ -126,8 +126,39 @@ export default function BulkGenerator({ isAuthenticated }: BulkGeneratorProps) {
       const text = await file.text()
       const lines = text.trim().split('\n')
       
-      // Simple CSV parsing (handles basic cases)
-      const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''))
+      // Proper CSV parsing that handles quoted fields with commas
+      const parseCSVLine = (line: string): string[] => {
+        const result: string[] = []
+        let current = ''
+        let inQuotes = false
+        
+        for (let i = 0; i < line.length; i++) {
+          const char = line[i]
+          
+          if (char === '"') {
+            if (inQuotes && line[i + 1] === '"') {
+              // Escaped quote
+              current += '"'
+              i++ // Skip next quote
+            } else {
+              // Toggle quote state
+              inQuotes = !inQuotes
+            }
+          } else if (char === ',' && !inQuotes) {
+            // End of field
+            result.push(current.trim())
+            current = ''
+          } else {
+            current += char
+          }
+        }
+        
+        // Add the last field
+        result.push(current.trim())
+        return result
+      }
+
+      const headers = parseCSVLine(lines[0]).map(h => h.replace(/^"|"$/g, '')) // Remove surrounding quotes
       
       // Validate required columns exist
       const requiredColumns = ['country', 'product_type', 'mpn', 'size']
@@ -139,14 +170,20 @@ export default function BulkGenerator({ isAuthenticated }: BulkGeneratorProps) {
       
       // Convert CSV to array of objects
       const csvData = lines.slice(1).filter(line => line.trim()).map((line, index) => {
-        const values = line.split(',').map(v => v.trim().replace(/"/g, ''))
+        const values = parseCSVLine(line).map(v => v.replace(/^"|"$/g, '')) // Remove surrounding quotes
         const row: Record<string, any> = {}
         headers.forEach((header, headerIndex) => {
-          row[header] = values[headerIndex] || ''
+          const value = values[headerIndex]
+          // Convert empty, whitespace-only, or undefined values to NULL for consistency
+          if (value === undefined || value === '' || (typeof value === 'string' && value.trim() === '')) {
+            row[header] = null
+          } else {
+            row[header] = value
+          }
         })
         
-        // Validate that this row has the required fields
-        const missingFields = requiredColumns.filter(col => !row[col] || !row[col].trim())
+        // Validate that this row has the required fields (NULL values are considered missing)
+        const missingFields = requiredColumns.filter(col => row[col] === null || row[col] === '' || (typeof row[col] === 'string' && row[col].trim() === ''))
         if (missingFields.length > 0) {
           throw new Error(`Row ${index + 2} is missing required fields: ${missingFields.join(', ')}`)
         }
@@ -166,7 +203,7 @@ export default function BulkGenerator({ isAuthenticated }: BulkGeneratorProps) {
         throw new Error('User not authenticated')
       }
 
-      // Send to Inngest bulk processing endpoint
+      // Send to bulk processing endpoint
       const response = await fetch('/api/bulk-csv-process', {
         method: 'POST',
         headers: {

@@ -68,7 +68,6 @@ export async function updateSession(request: NextRequest) {
   // Define public routes that don't require authentication
   const publicRoutes = [
     '/api/echo',
-    '/api/inngest', // Inngest webhook endpoint
     '/auth',
     '/login',
     '/library', // Library is public
