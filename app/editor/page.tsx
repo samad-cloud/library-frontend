@@ -1,6 +1,6 @@
 import { createClient } from '@/utils/supabase/server'
 import ImageEditorClient from '@/components/editor/ImageEditorClient'
-import ResponsiveAppLayout from '@/components/shared/ResponsiveAppLayout'
+import AppLayout from '@/components/shared/AppLayout'
 
 export default async function ImageEditorPage() {
   const supabase = await createClient()
@@ -8,7 +8,7 @@ export default async function ImageEditorPage() {
   // Try to get user, but don't redirect if not authenticated
   const { data: { user } } = await supabase.auth.getUser()
   return (
-    <ResponsiveAppLayout user={user ? { email: user.email, name: user.user_metadata?.name } : undefined}>
+    <AppLayout>
       <div className="h-full flex flex-col overflow-hidden">
         {!user && (
           <div className="p-4 bg-blue-50 border-b border-blue-200 flex-shrink-0">
@@ -25,6 +25,6 @@ export default async function ImageEditorPage() {
           <ImageEditorClient isAuthenticated={!!user} />
         </div>
       </div>
-    </ResponsiveAppLayout>
+    </AppLayout>
   )
 }

@@ -283,12 +283,11 @@ export default function ImageEditorClient({ isAuthenticated }: ImageEditorClient
       const requestBody = editorMode === 'edit' 
         ? {
             imageBase64: imageForAPI!.split(',')[1],
-            instruction: messageText,
-            conversationHistory: messages
+            instruction: messageText
           }
         : {
             prompt: messageText,
-            conversationHistory: messages
+            conversationHistory: messages // Keep conversation history for image creator (different API)
           }
 
       const response = await fetch(endpoint, {
@@ -306,15 +305,24 @@ export default function ImageEditorClient({ isAuthenticated }: ImageEditorClient
       const data = await response.json()
       
       if (data.success) {
-        setMessages(prev => [...prev, data.message])
+        // Create a chat message from the new API response format
+        const assistantMessage: ChatMessage = {
+          id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          role: 'assistant',
+          content: data.instructions || 'Image editing completed.',
+          imageUrl: data.editedImageUrl,
+          timestamp: data.timestamp || Date.now()
+        }
+        
+        setMessages(prev => [...prev, assistantMessage])
         
         // Update latest image reference and session images if AI returned an image
-        if (data.message.imageUrl) {
-          setLatestImageRef(data.message.imageUrl)
+        if (data.hasEditedImage && data.editedImageUrl) {
+          setLatestImageRef(data.editedImageUrl)
           
           // Add new generated image to session images
           setSessionImages(prev => {
-            const newImages = [...prev, data.message.imageUrl]
+            const newImages = [...prev, data.editedImageUrl]
             setCurrentImageIndex(newImages.length - 1) // Set to newest image
             return newImages
           })

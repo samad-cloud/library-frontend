@@ -25,6 +25,14 @@ const nextConfig = {
     scrollRestoration: true,
   },
 
+  // API routes configuration for larger payloads
+  api: {
+    bodyParser: {
+      sizeLimit: '10mb', // Increase body size limit for image uploads
+    },
+    responseLimit: '10mb', // Increase response size limit
+  },
+
   // Headers for caching and security
   async headers() {
     return [

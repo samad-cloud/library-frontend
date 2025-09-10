@@ -355,7 +355,7 @@ export default function Sidebar({ onCalendarToggle }: SidebarProps) {
   return (
     <div className="w-64 bg-white border-r border-gray-200 flex flex-col">
       {/* Logo */}
-      <div className="p-6 border-b border-gray-200">
+      <div className="p-5 border-b border-gray-200">
         <Link href="/dashboard" aria-label="GeneraPix Home">
           <div className="text-xl font-bold text-gray-900 hover:text-pink-600 transition-colors cursor-pointer">
             GeneraPix

@@ -3,24 +3,44 @@ import { GoogleGenAI } from '@google/genai'
 
 const genAI = new GoogleGenAI({apiKey: process.env.GEMINI_API_KEY!})
 
-interface ChatMessage {
-  id: string
-  role: 'user' | 'assistant'
-  content: string
-  imageUrl?: string
-  timestamp: number
-}
+// Constants for payload optimization
+const MAX_PAYLOAD_SIZE_MB = 8 // Vercel's limit is 10MB, we use 8MB for safety
+const MAX_IMAGE_SIZE_MB = 5 // Maximum individual image size in MB
+const MAX_IMAGE_DIMENSION = 2048 // Maximum width/height for processing (increased for larger images)
 
 interface EditRequest {
   imageBase64: string
   instruction: string
-  conversationHistory?: ChatMessage[]
+}
+
+// Utility function to estimate payload size in MB
+function estimatePayloadSizeMB(payload: any): number {
+  const jsonString = JSON.stringify(payload)
+  const sizeInBytes = new TextEncoder().encode(jsonString).length
+  return sizeInBytes / (1024 * 1024)
+}
+
+// Simplified to direct image + prompt processing (no conversation history)
+
+// Server-side image dimension estimation (basic)
+function estimateImageDimensions(base64: string): { estimated: boolean, shouldCompress: boolean } {
+  // Estimate dimensions based on base64 length
+  // Base64 encoding increases size by ~33%, and each pixel takes ~4 bytes (RGBA)
+  const base64Length = base64.length
+  const estimatedBytes = (base64Length * 3) / 4 // Approximate original size
+  const estimatedPixels = estimatedBytes / 4 // Assume RGBA
+  const estimatedDimension = Math.sqrt(estimatedPixels)
+  
+  return {
+    estimated: true,
+    shouldCompress: estimatedDimension > MAX_IMAGE_DIMENSION || estimatedBytes > MAX_IMAGE_SIZE_MB * 1024 * 1024 // Use configurable limit
+  }
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { imageBase64, instruction, conversationHistory = [] }: EditRequest = body
+    const { imageBase64, instruction }: EditRequest = body
 
     if (!imageBase64?.trim()) {
       return NextResponse.json(
@@ -36,26 +56,42 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    console.log('🎨 Starting Nano Banana image editing...')
-    console.log('📝 Instruction:', instruction.substring(0, 100) + '...')
-    console.log('🗂️ Conversation history:', conversationHistory.length, 'messages')
+    // Check payload size (simplified without conversation history)
+    const payloadSize = estimatePayloadSizeMB({ imageBase64, instruction })
+    console.log(`📊 Payload size: ${payloadSize.toFixed(2)}MB`)
 
-    // Build context from conversation history
-    let contextPrompt = ''
-    if (conversationHistory.length > 0) {
-      contextPrompt = '\n\nPrevious conversation context:\n'
-      conversationHistory.slice(-5).forEach((msg, index) => {
-        if (msg.role === 'user') {
-          contextPrompt += `User: ${msg.content}\n`
-        } else if (msg.role === 'assistant') {
-          contextPrompt += `Assistant: ${msg.content}\n`
-        }
-      })
-      contextPrompt += '\nNow apply this new instruction:\n'
+    // Check if image is too large
+    const imageAnalysis = estimateImageDimensions(imageBase64)
+    if (imageAnalysis.shouldCompress) {
+      return NextResponse.json(
+        { 
+          error: 'Image too large', 
+          message: `Please use a smaller image (max ${MAX_IMAGE_DIMENSION}x${MAX_IMAGE_DIMENSION} pixels or ${MAX_IMAGE_SIZE_MB}MB). Consider resizing your image before uploading.`,
+          suggestedAction: 'resize_image'
+        },
+        { status: 413 }
+      )
     }
 
-    // Prepare the editing prompt for Nano Banana
-    const editingPrompt = `${instruction}`
+    // Final payload size check
+    if (payloadSize > MAX_PAYLOAD_SIZE_MB) {
+      return NextResponse.json(
+        { 
+          error: 'Request too large', 
+          message: `Payload size (${payloadSize.toFixed(2)}MB) exceeds limit (${MAX_PAYLOAD_SIZE_MB}MB). Please use a smaller image.`,
+          currentSize: payloadSize,
+          maxSize: MAX_PAYLOAD_SIZE_MB
+        },
+        { status: 413 }
+      )
+    }
+
+    console.log('🎨 Starting Nano Banana image editing...')
+    console.log('📝 Instruction:', instruction.substring(0, 100) + '...')
+    console.log('🖼️ Processing image directly with Nano Banana')
+
+    // Use the instruction directly without conversation history
+    const editingPrompt = instruction
 
     // Prepare the content for Nano Banana
     const editPrompt = [
@@ -100,20 +136,14 @@ export async function POST(request: NextRequest) {
       responseText += '\n\nNote: This edit requires manual implementation or may need to be processed through an image generation model for the actual visual changes.'
     }
 
-    // Create response message
-    const assistantMessage: ChatMessage = {
-      id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      role: 'assistant',
-      content: responseText || 'I\'ve analyzed your image and editing request.',
-      imageUrl: editedImageBase64 ? `data:image/png;base64,${editedImageBase64}` : undefined,
-      timestamp: Date.now()
-    }
-
+    // Return simplified response without conversation structure
     return NextResponse.json({
       success: true,
-      message: assistantMessage,
       hasEditedImage: !!editedImageBase64,
-      instructions: responseText
+      editedImageBase64: editedImageBase64,
+      editedImageUrl: editedImageBase64 ? `data:image/png;base64,${editedImageBase64}` : undefined,
+      instructions: responseText || 'Image editing completed.',
+      timestamp: Date.now()
     })
 
   } catch (error) {
