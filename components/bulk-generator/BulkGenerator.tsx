@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/utils/supabase/client'
 import CsvUploadSection from './CsvUploadSection'
 import BatchProgressSection from './BatchProgressSection'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 interface CsvTemplate {
   id: string
@@ -36,6 +37,8 @@ interface BulkGeneratorProps {
   isAuthenticated: boolean
 }
 
+type DepartmentType = 'email_marketing' | 'google_sem' | 'groupon'
+
 export default function BulkGenerator({ isAuthenticated }: BulkGeneratorProps) {
   const [templates, setTemplates] = useState<CsvTemplate[]>([])
   const [batches, setBatches] = useState<CsvBatch[]>([])
@@ -43,6 +46,7 @@ export default function BulkGenerator({ isAuthenticated }: BulkGeneratorProps) {
   const [error, setError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [selectedDepartment, setSelectedDepartment] = useState<DepartmentType>('email_marketing')
   
   const supabase = createClient()
 
@@ -82,12 +86,26 @@ export default function BulkGenerator({ isAuthenticated }: BulkGeneratorProps) {
       {
         id: 'default-template',
         name: 'Bulk Generation Template',
-        description: 'Template with required columns: country, product_type, mpn, size',
+        description: 'Template with required columns: Product, Variant, Size, Region, Theme',
         template_type: 'bulk_generation',
-        required_columns: ['country', 'product_type', 'mpn', 'size'],
-        optional_columns: [],
-        column_descriptions: {},
-        sample_data: {},
+        required_columns: ['Product', 'Variant', 'Size', 'Region', 'Theme'],
+        optional_columns: ['additional comments'],
+        column_descriptions: {
+          'Product': 'The product name or type',
+          'Variant': 'Product variant or specific model',
+          'Size': 'Product size or dimensions',
+          'Region': 'Target region or market',
+          'Theme': 'Theme or style for the generation',
+          'additional comments': 'Optional additional context or requirements'
+        },
+        sample_data: {
+          'Product': 'iPhone',
+          'Variant': 'Pro Max',
+          'Size': '6.7 inch',
+          'Region': 'US',
+          'Theme': 'premium lifestyle',
+          'additional comments': 'focus on business professional usage'
+        },
         is_default: true,
         download_count: 0
       }
@@ -161,7 +179,7 @@ export default function BulkGenerator({ isAuthenticated }: BulkGeneratorProps) {
       const headers = parseCSVLine(lines[0]).map(h => h.replace(/^"|"$/g, '')) // Remove surrounding quotes
       
       // Validate required columns exist
-      const requiredColumns = ['country', 'product_type', 'mpn', 'size']
+      const requiredColumns = ['Product', 'Variant', 'Size', 'Region', 'Theme']
       const missingColumns = requiredColumns.filter(col => !headers.includes(col))
       
       if (missingColumns.length > 0) {
@@ -211,6 +229,7 @@ export default function BulkGenerator({ isAuthenticated }: BulkGeneratorProps) {
         },
         body: JSON.stringify({
           csvData,
+          department: selectedDepartment,
           aspectRatio: '1:1',
           batchSize: 5,
           userId: user.id
@@ -246,10 +265,13 @@ export default function BulkGenerator({ isAuthenticated }: BulkGeneratorProps) {
     try {
       // Create a simple CSV template with required columns
       const templateContent = [
-        'country,product_type,mpn,size',
-        'France,Widget,ABC123,Large',
-        'Germany,Gadget,XYZ456,Medium',
-        'Spain,Tool,DEF789,Small'
+        'Product,Variant,Size,Region,Theme,additional comments',
+        'iPhone,Pro Max,6.7 inch,US,premium lifestyle,focus on business professional usage',
+        'Samsung Galaxy,S24 Ultra,6.8 inch,UK,tech innovation,highlight camera features',
+        'MacBook,Air M2,13 inch,Canada,productivity,emphasize portability',
+        'AirPods,Pro 2,Standard,Germany,audio quality,noise cancellation focus',
+        'iPad,Pro,12.9 inch,France,creativity,digital art and design',
+        'Nike Shoes,Air Max,Size 10,Australia,athletic performance,running focus'
       ].join('\n')
       
       // Create and download the file
@@ -257,7 +279,7 @@ export default function BulkGenerator({ isAuthenticated }: BulkGeneratorProps) {
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
-      link.download = 'bulk_generation_template.csv'
+      link.download = 'template.csv'
       
       document.body.appendChild(link)
       link.click()
@@ -275,7 +297,7 @@ export default function BulkGenerator({ isAuthenticated }: BulkGeneratorProps) {
 
   const handleUploadTemplate = async (file: File) => {
     // For now, just show a message that template upload is not needed
-    setSuccessMessage('Template upload is not needed! Simply ensure your CSV has columns: country, product_type, mpn, size')
+    setSuccessMessage('Template upload is not needed! Simply ensure your CSV has columns: Product, Variant, Size, Region, Theme')
     setTimeout(() => setSuccessMessage(null), 5000)
   }
 
@@ -375,7 +397,30 @@ export default function BulkGenerator({ isAuthenticated }: BulkGeneratorProps) {
 
               <div className="grid grid-cols-1 xl:grid-cols-4 gap-8">
                 {/* Upload Section - 3/4 width */}
-                <div className="xl:col-span-3">
+                <div className="xl:col-span-3 space-y-6">
+                  {/* Department Selector */}
+                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-4">Department Selection</h3>
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">
+                        Select Department
+                      </label>
+                      <Select value={selectedDepartment} onValueChange={(value: DepartmentType) => setSelectedDepartment(value)}>
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Select a department" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="email_marketing">Email Marketing</SelectItem>
+                          <SelectItem value="google_sem">Google SEM</SelectItem>
+                          <SelectItem value="groupon">Groupon</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-gray-500">
+                        This determines which specialized assistant will be used for content generation.
+                      </p>
+                    </div>
+                  </div>
+
                   <CsvUploadSection
                     onUpload={handleUpload}
                     isUploading={isUploading}

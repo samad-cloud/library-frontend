@@ -140,9 +140,10 @@ export default function CsvUploadSection({
 
           // Find best matching template
           for (const template of templates) {
-            const hasAllRequired = template.required_columns.every(col => 
-              headers.some(h => h.toLowerCase().includes(col.toLowerCase()))
-            )
+            const hasAllRequired = template.required_columns.every(col => {
+              return headers.some(h => h.toLowerCase().trim() === col.toLowerCase().trim())
+            })
+            
             if (hasAllRequired) {
               matchedTemplate = template
               break
@@ -150,12 +151,23 @@ export default function CsvUploadSection({
           }
 
           if (!matchedTemplate && templates.length > 0) {
-            errors.push('File does not match any available template. Please select a template that matches your file format or update your file.')
+            errors.push(`File does not match any available template. Your CSV has columns: ${headers.join(', ')}`)
             // List available templates and their requirements
             const templateList = templates.map(t => 
               `• ${t.name}: requires ${t.required_columns.join(', ')}`
             ).join('\n')
             warnings.push(`Available templates:\n${templateList}`)
+            
+            // Show missing columns for debugging
+            const defaultTemplate = templates[0]
+            if (defaultTemplate) {
+              const missing = defaultTemplate.required_columns.filter(col => 
+                !headers.some(h => h.toLowerCase().trim() === col.toLowerCase().trim())
+              )
+              if (missing.length > 0) {
+                errors.push(`Missing required columns: ${missing.join(', ')}`)
+              }
+            }
           }
 
           // Basic validation

@@ -5,6 +5,7 @@ import { createClient } from '@/utils/supabase/server'
 
 interface BulkProcessRequest {
   csvData: Array<Record<string, any>>
+  department: string
   aspectRatio?: string
   batchSize?: number
   userId?: string
@@ -16,6 +17,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { 
       csvData,
+      department,
       aspectRatio = '1:1',
       batchSize = 3, // PM2 processes smaller batches
       userId,
@@ -39,13 +41,22 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate that required columns exist in at least one row
-    const requiredColumns = ['country', 'product_type', 'mpn', 'size']
+    const requiredColumns = ['Product', 'Variant', 'Size', 'Region', 'Theme']
     const sampleRow = csvData[0] || {}
     const missingColumns = requiredColumns.filter(col => !(col in sampleRow))
     
     if (missingColumns.length > 0) {
       return NextResponse.json(
         { error: `Missing required columns: ${missingColumns.join(', ')}. Expected: ${requiredColumns.join(', ')}` },
+        { status: 400 }
+      )
+    }
+
+    // Validate department
+    const validDepartments = ['email_marketing', 'google_sem', 'groupon']
+    if (!department || !validDepartments.includes(department)) {
+      return NextResponse.json(
+        { error: `Invalid department: ${department}. Expected one of: ${validDepartments.join(', ')}` },
         { status: 400 }
       )
     }
@@ -59,7 +70,8 @@ export async function POST(request: NextRequest) {
 
     console.log('🚀 Creating PM2 bulk CSV processing job...')
     console.log('📊 Total rows:', csvData.length)
-    console.log('📝 Required columns: country, product_type, mpn, size')
+    console.log('📝 Required columns: Product, Variant, Size, Region, Theme')
+    console.log('🏢 Department:', department)
     console.log('👤 User ID:', userId)
 
     // Let Supabase generate UUID automatically unless jobId is provided
@@ -135,7 +147,8 @@ export async function POST(request: NextRequest) {
       error_message: null,
       storage_path: uploadData.path,
       storage_bucket: 'csv-uploads',
-      csv_headers: csvHeaders
+      csv_headers: csvHeaders,
+      department: department
     }
 
     // Only include ID if explicitly provided
