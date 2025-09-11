@@ -19,20 +19,34 @@ export interface SocialMediaGeneratorState {
 }
 
 export interface EmailMarketingGeneratorState {
+  numberOfVariations: number
   prompt: string
   selectedAspectRatio: string
   generatedContent: string
-  generatedImage: string | null
+  generatedImages: Array<{
+    index: number;
+    variation?: number;
+    prompt: string;
+    imageUrl: string;
+    error?: string;
+  }>
   error: string | null
   workflowSteps: any[] // Empty array when saved, not restored from storage
 }
 
 export interface GoogleSEMGeneratorState {
+  numberOfVariations: number
   prompt: string
   selectedAspectRatio: string
   generatedContent: string
-  originalImage: string | null
-  googleAdsImage: string | null
+  generatedImages: Array<{
+    index: number;
+    variation?: number;
+    prompt: string;
+    imageUrl: string;
+    type?: string;
+    error?: string;
+  }>
   error: string | null
   workflowSteps: any[] // Empty array when saved, not restored from storage
 }
@@ -40,6 +54,7 @@ export interface GoogleSEMGeneratorState {
 export interface GrouponGeneratorState {
   prompt: string
   selectedAspectRatio: string
+  numberOfVariations: number
   generatedContent: string
   generatedImages: Array<{
     index: number

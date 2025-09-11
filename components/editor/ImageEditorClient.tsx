@@ -4,7 +4,8 @@ import { useState, useRef, useCallback, useEffect } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Plus, Send, Loader2, Paperclip, Edit3, Sparkles, ChevronDown, ChevronUp, RotateCcw } from 'lucide-react'
+import { Plus, Send, Loader2, Paperclip, Edit3, Sparkles, ChevronDown, ChevronUp, RotateCcw, Save, Download } from 'lucide-react'
+import { saveEditedImage } from '@/utils/supabase/imageStorage'
 
 interface ChatMessage {
   id: string
@@ -31,6 +32,8 @@ export default function ImageEditorClient({ isAuthenticated }: ImageEditorClient
   const [currentImageIndex, setCurrentImageIndex] = useState(0) // Index of currently selected reference image
   const [editorMode, setEditorMode] = useState<EditorMode>('edit')
   const [expandedMessages, setExpandedMessages] = useState<Set<string>>(new Set()) // Track which messages are expanded
+  const [isSaving, setIsSaving] = useState(false) // Track save state
+  const [saveSuccess, setSaveSuccess] = useState<string | null>(null) // Track save success message
   const fileInputRef = useRef<HTMLInputElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const searchParams = useSearchParams()
@@ -45,6 +48,7 @@ export default function ImageEditorClient({ isAuthenticated }: ImageEditorClient
     const referenceImage = searchParams.get('ref')
     const imageName = searchParams.get('name') || 'Generated Image'
     const source = searchParams.get('source')
+    const isFromCleanup = searchParams.get('cleanup') === 'true'
     
     let imageDataUrl: string | null = null
     let finalImageName = imageName
@@ -68,18 +72,46 @@ export default function ImageEditorClient({ isAuthenticated }: ImageEditorClient
         sessionStorage.removeItem('editorImageData')
         sessionStorage.removeItem('editorImageName')
       }
+    } else if (source === 'error') {
+      // Handle error case - show error message but allow editor to function
+      const errorMessage = sessionStorage.getItem('editorError')
+      if (errorMessage) {
+        console.warn('Editor navigation error:', errorMessage)
+        // You could set this in state to display to user if needed
+        // setError(errorMessage)
+        sessionStorage.removeItem('editorError')
+      }
     } else if (referenceImage) {
-      // Load from URL parameters for smaller images
+      // Load from URL parameters
       try {
         const decodedImage = decodeURIComponent(referenceImage)
-        imageDataUrl = decodedImage.startsWith('data:') 
-          ? decodedImage 
-          : `data:image/png;base64,${decodedImage}`
+        
+        // Handle different types of image URLs
+        if (decodedImage.startsWith('data:')) {
+          // Data URL - use directly
+          imageDataUrl = decodedImage
+        } else if (decodedImage.startsWith('http')) {
+          // HTTP URL (including from editor-cleanup bucket) - use directly
+          imageDataUrl = decodedImage
+        } else {
+          // Assume base64 string - convert to data URL
+          imageDataUrl = `data:image/png;base64,${decodedImage}`
+        }
+        
+        // Decode the image name as well if it comes from URL parameters
+        try {
+          finalImageName = decodeURIComponent(imageName)
+        } catch (nameDecodeError) {
+          console.warn('Failed to decode image name, using as-is:', nameDecodeError)
+          finalImageName = imageName
+        }
         
         console.log('🔗 Loaded image from URL parameters:', {
           name: finalImageName,
           length: imageDataUrl.length,
-          isDataUrl: imageDataUrl.startsWith('data:')
+          isDataUrl: imageDataUrl.startsWith('data:'),
+          isHttpUrl: imageDataUrl.startsWith('http'),
+          isFromCleanup
         })
       } catch (error) {
         console.error('Error loading reference image from URL:', error)
@@ -220,6 +252,16 @@ export default function ImageEditorClient({ isAuthenticated }: ImageEditorClient
     reader.readAsDataURL(file)
   }, [])
 
+  // Clear save success message after 5 seconds
+  useEffect(() => {
+    if (saveSuccess) {
+      const timer = setTimeout(() => {
+        setSaveSuccess(null)
+      }, 5000)
+      return () => clearTimeout(timer)
+    }
+  }, [saveSuccess])
+
   const handleFileSelect = () => {
     fileInputRef.current?.click()
   }
@@ -243,6 +285,34 @@ export default function ImageEditorClient({ isAuthenticated }: ImageEditorClient
       return sessionImages[currentImageIndex]
     }
     return latestImageRef
+  }
+
+  // Helper function to convert HTTP URLs to base64 for API calls
+  const convertToBase64 = async (imageUrl: string): Promise<string | null> => {
+    try {
+      if (imageUrl.startsWith('data:')) {
+        // Already a data URL, return as is
+        return imageUrl
+      }
+      
+      if (imageUrl.startsWith('http')) {
+        // HTTP URL - fetch and convert to base64
+        const response = await fetch(imageUrl)
+        const blob = await response.blob()
+        
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onload = () => resolve(reader.result as string)
+          reader.onerror = reject
+          reader.readAsDataURL(blob)
+        })
+      }
+      
+      return null
+    } catch (error) {
+      console.error('Error converting image to base64:', error)
+      return null
+    }
   }
 
   const getReferenceImageLabel = () => {
@@ -280,15 +350,29 @@ export default function ImageEditorClient({ isAuthenticated }: ImageEditorClient
 
     try {
       const endpoint = editorMode === 'edit' ? '/api/image-editor' : '/api/image-creator'
-      const requestBody = editorMode === 'edit' 
-        ? {
-            imageBase64: imageForAPI!.split(',')[1],
-            instruction: messageText
-          }
-        : {
-            prompt: messageText,
-            conversationHistory: messages // Keep conversation history for image creator (different API)
-          }
+      
+      let requestBody: any
+      
+      if (editorMode === 'edit') {
+        // Convert image URL to base64 for API
+        const base64Image = await convertToBase64(imageForAPI!)
+        if (!base64Image) {
+          throw new Error('Failed to process image for editing')
+        }
+        
+        // Extract base64 data (remove data:image/...;base64, prefix)
+        const base64Data = base64Image.includes(',') ? base64Image.split(',')[1] : base64Image
+        
+        requestBody = {
+          imageBase64: base64Data,
+          instruction: messageText
+        }
+      } else {
+        requestBody = {
+          prompt: messageText,
+          conversationHistory: messages // Keep conversation history for image creator (different API)
+        }
+      }
 
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -361,6 +445,72 @@ export default function ImageEditorClient({ isAuthenticated }: ImageEditorClient
     }
   }
 
+  // Save a specific image to Supabase storage
+  const saveSpecificImage = async (imageUrl: string, messageId: string) => {
+    if (!isAuthenticated) {
+      alert('Please sign in to save images.')
+      return
+    }
+
+    if (!imageUrl) {
+      alert('No image to save.')
+      return
+    }
+
+    setIsSaving(true)
+    setSaveSuccess(null)
+
+    try {
+      // Find the user message that led to this image
+      const messageIndex = messages.findIndex(m => m.id === messageId)
+      const relatedUserMessage = messages.slice(0, messageIndex).reverse().find(m => m.role === 'user')
+      const instruction = relatedUserMessage?.content || 'Image edited'
+      
+      // Generate a descriptive filename
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+      const fileName = `edited_image_${timestamp}.png`
+
+      const result = await saveEditedImage({
+        imageUrl,
+        fileName,
+        instruction,
+        originalImageName: attachedImageName || 'Unknown'
+      })
+
+      if (result.success) {
+        setSaveSuccess(`Image saved successfully!`)
+        console.log('Image saved to:', result.url)
+      } else {
+        throw new Error(result.error || 'Failed to save image')
+      }
+    } catch (error) {
+      console.error('Error saving image:', error)
+      alert(`Failed to save image: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  // Download a specific image
+  const downloadSpecificImage = (imageUrl: string) => {
+    if (!imageUrl) {
+      alert('No image to download.')
+      return
+    }
+
+    try {
+      const link = document.createElement('a')
+      link.href = imageUrl
+      link.download = `edited_image_${new Date().toISOString().replace(/[:.]/g, '-')}.png`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+    } catch (error) {
+      console.error('Error downloading image:', error)
+      alert('Failed to download image. Please try right-clicking the image and selecting "Save image as..."')
+    }
+  }
+
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
@@ -398,6 +548,13 @@ export default function ImageEditorClient({ isAuthenticated }: ImageEditorClient
             </button>
           </div>
         </div>
+        
+        {/* Success Message */}
+        {saveSuccess && (
+          <div className="mt-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+            <p className="text-sm text-green-700">{saveSuccess}</p>
+          </div>
+        )}
         
         {/* Debug info in development */}
         {process.env.NODE_ENV === 'development' && (latestImageRef || sessionImages.length > 0) && (
@@ -442,13 +599,47 @@ export default function ImageEditorClient({ isAuthenticated }: ImageEditorClient
                 
                 <div className={`flex-1 ${message.role === 'user' ? 'ml-12' : ''}`}>
                   {message.imageUrl && (
-                    <div className="mb-3">
+                    <div className="mb-3 relative group">
                       <img
                         src={message.imageUrl}
                         alt="Message image"
                         className="w-32 h-32 object-cover rounded-lg cursor-pointer hover:opacity-90 border border-gray-200 hover:border-gray-300 transition-all"
                         onClick={() => openImageInNewTab(message.imageUrl!)}
                       />
+                      
+                      {/* Action buttons overlay */}
+                      <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          className="h-6 w-6 p-0 bg-black/70 hover:bg-black/80 border-0 rounded-full"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            saveSpecificImage(message.imageUrl!, message.id)
+                          }}
+                          disabled={isSaving || !isAuthenticated}
+                          title={isAuthenticated ? "Save to gallery" : "Sign in to save"}
+                        >
+                          {isSaving ? (
+                            <Loader2 className="w-3 h-3 text-white animate-spin" />
+                          ) : (
+                            <Save className="w-3 h-3 text-white" />
+                          )}
+                        </Button>
+                        
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          className="h-6 w-6 p-0 bg-black/70 hover:bg-black/80 border-0 rounded-full"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            downloadSpecificImage(message.imageUrl!)
+                          }}
+                          title="Download image"
+                        >
+                          <Download className="w-3 h-3 text-white" />
+                        </Button>
+                      </div>
                     </div>
                   )}
                   

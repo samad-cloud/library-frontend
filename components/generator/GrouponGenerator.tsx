@@ -13,6 +13,7 @@ import {
   STORAGE_KEYS,
   type GrouponGeneratorState 
 } from '@/lib/sessionStorage'
+import { navigateToEditor } from '@/lib/editorNavigation'
 import SaveImageButton from '@/components/shared/SaveImageButton'
 import DownloadImageButton from '@/components/shared/DownloadImageButton'
 
@@ -31,9 +32,11 @@ export default function GrouponGenerator({ isAuthenticated }: GrouponGeneratorPr
   const router = useRouter()
   const [prompt, setPrompt] = useState('')
   const [selectedAspectRatio, setSelectedAspectRatio] = useState('16:9')
+  const [numberOfVariations, setNumberOfVariations] = useState(1)
   const [generatedContent, setGeneratedContent] = useState('')
   const [generatedImages, setGeneratedImages] = useState<Array<{
     index: number;
+    variation?: number;
     prompt: string;
     imageUrl: string;
     error?: string;
@@ -52,6 +55,7 @@ export default function GrouponGenerator({ isAuthenticated }: GrouponGeneratorPr
     if (savedState) {
       setPrompt(savedState.prompt)
       setSelectedAspectRatio(savedState.selectedAspectRatio)
+      setNumberOfVariations(savedState.numberOfVariations || 1)
       setGeneratedContent(savedState.generatedContent)
       setGeneratedImages(savedState.generatedImages || [])
       setError(savedState.error)
@@ -66,13 +70,14 @@ export default function GrouponGenerator({ isAuthenticated }: GrouponGeneratorPr
     const stateToSave: GrouponGeneratorState = {
       prompt,
       selectedAspectRatio,
+      numberOfVariations,
       generatedContent,
       generatedImages,
       error,
       workflowSteps: [] // Don't save workflow steps as they contain React components
     }
     saveToSessionStorage(STORAGE_KEYS.GROUPON, stateToSave)
-  }, [prompt, selectedAspectRatio, generatedContent, generatedImages, error])
+  }, [prompt, selectedAspectRatio, numberOfVariations, generatedContent, generatedImages, error])
 
   const updateWorkflowStep = (stepName: string, status: WorkflowStep['status'], message?: string) => {
     setWorkflowSteps(prev => prev.map(step => 
@@ -82,19 +87,8 @@ export default function GrouponGenerator({ isAuthenticated }: GrouponGeneratorPr
     ))
   }
 
-  const navigateToEditor = (imageUrl: string, imageName: string = 'Groupon Image') => {
-    if (!imageUrl) return
-    
-    try {
-      // Encode the image data for URL transmission
-      const encodedImage = encodeURIComponent(imageUrl)
-      const encodedName = encodeURIComponent(imageName)
-      
-      // Navigate to editor with reference image
-      router.push(`/editor?ref=${encodedImage}&name=${encodedName}`)
-    } catch (error) {
-      console.error('Error navigating to editor:', error)
-    }
+  const handleNavigateToEditor = async (imageUrl: string, imageName: string = 'Groupon Image') => {
+    await navigateToEditor({ imageUrl, imageName, router })
   }
 
   const generateGroupon = async () => {
@@ -122,6 +116,7 @@ export default function GrouponGenerator({ isAuthenticated }: GrouponGeneratorPr
         body: JSON.stringify({
           prompt: prompt.trim(),
           aspectRatio: selectedAspectRatio,
+          numberOfVariations,
         })
       })
 
@@ -237,6 +232,28 @@ export default function GrouponGenerator({ isAuthenticated }: GrouponGeneratorPr
                 Groupon images are automatically generated in 16:9 format for optimal display
               </p>
             </div>
+
+            {/* Number of Variations */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                <ImageIcon className="w-4 h-4" />
+                Number of Image Variations
+              </label>
+              <Select value={numberOfVariations.toString()} onValueChange={(value) => setNumberOfVariations(parseInt(value))}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select number of variations" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1">1 variation (recommended)</SelectItem>
+                  <SelectItem value="2">2 variations</SelectItem>
+                  <SelectItem value="3">3 variations</SelectItem>
+                  <SelectItem value="4">4 variations</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-gray-500">
+                More variations give you more options to choose from, but take longer to generate
+              </p>
+            </div>
             
             <Button 
               onClick={generateGroupon}
@@ -334,14 +351,16 @@ export default function GrouponGenerator({ isAuthenticated }: GrouponGeneratorPr
           {generatedImages.length > 0 && (
             <div>
               <div className="mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">Generated Images ({generatedImages.filter(img => img.imageUrl).length}/6)</h3>
+                <h3 className="text-lg font-semibold text-gray-900">Generated Images ({generatedImages.filter(img => img.imageUrl).length})</h3>
                 <p className="text-sm text-gray-600">Click on any image to view full size or edit</p>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {generatedImages.map((image, index) => (
-                  <Card key={index} className="relative">
+                  <Card key={`${image.index}-${image.variation || 1}`} className="relative">
                     <div className="bg-green-600 text-white text-center py-2 rounded-t-lg">
-                      <h4 className="font-medium text-sm">Image {image.index}</h4>
+                      <h4 className="font-medium text-sm">
+                        Image {image.index}{image.variation && image.variation > 1 ? `.${image.variation}` : ''}
+                      </h4>
                     </div>
                     <CardContent className="p-4">
                       <div className="aspect-video bg-gray-100 rounded-lg flex items-center justify-center mb-4 overflow-hidden">
@@ -390,7 +409,7 @@ export default function GrouponGenerator({ isAuthenticated }: GrouponGeneratorPr
                               variant="ghost" 
                               size="sm" 
                               className="flex-1 text-green-600 hover:text-green-700"
-                              onClick={() => navigateToEditor(image.imageUrl, `Groupon Image ${image.index}`)}
+                              onClick={() => handleNavigateToEditor(image.imageUrl, `Groupon Image ${image.index}`)}
                             >
                               <Edit3 className="w-4 h-4 mr-2" />
                               Edit

@@ -13,6 +13,7 @@ import {
   STORAGE_KEYS,
   type GoogleSEMGeneratorState 
 } from '@/lib/sessionStorage'
+import { navigateToEditor } from '@/lib/editorNavigation'
 import SaveImageButton from '@/components/shared/SaveImageButton'
 import DownloadImageButton from '@/components/shared/DownloadImageButton'
 
@@ -31,9 +32,16 @@ export default function GoogleSEMGenerator({ isAuthenticated }: GoogleSEMGenerat
   const router = useRouter()
   const [prompt, setPrompt] = useState('')
   const [selectedAspectRatio, setSelectedAspectRatio] = useState('1:1')
+  const [numberOfVariations, setNumberOfVariations] = useState(1)
   const [generatedContent, setGeneratedContent] = useState('')
-  const [originalImage, setOriginalImage] = useState<string | null>(null)
-  const [googleAdsImage, setGoogleAdsImage] = useState<string | null>(null)
+  const [generatedImages, setGeneratedImages] = useState<Array<{
+    index: number;
+    variation?: number;
+    prompt: string;
+    imageUrl: string;
+    type?: string;
+    error?: string;
+  }>>([]);
   const [error, setError] = useState<string | null>(null)
   const [workflowSteps, setWorkflowSteps] = useState<WorkflowStep[]>([
     { name: 'Creating Thread', status: 'pending', icon: MessageSquare },
@@ -49,9 +57,9 @@ export default function GoogleSEMGenerator({ isAuthenticated }: GoogleSEMGenerat
     if (savedState) {
       setPrompt(savedState.prompt)
       setSelectedAspectRatio(savedState.selectedAspectRatio)
+      setNumberOfVariations(savedState.numberOfVariations || 1)
       setGeneratedContent(savedState.generatedContent)
-      setOriginalImage(savedState.originalImage)
-      setGoogleAdsImage(savedState.googleAdsImage)
+      setGeneratedImages(savedState.generatedImages || [])
       setError(savedState.error)
       // Don't restore workflowSteps from storage as icons can't be serialized
       // They will be reset to their initial state
@@ -64,14 +72,14 @@ export default function GoogleSEMGenerator({ isAuthenticated }: GoogleSEMGenerat
     const stateToSave: GoogleSEMGeneratorState = {
       prompt,
       selectedAspectRatio,
+      numberOfVariations,
       generatedContent,
-      originalImage,
-      googleAdsImage,
+      generatedImages,
       error,
       workflowSteps: [] // Don't save workflow steps as they contain React components
     }
     saveToSessionStorage(STORAGE_KEYS.GOOGLE_SEM, stateToSave)
-  }, [prompt, selectedAspectRatio, generatedContent, originalImage, googleAdsImage, error])
+  }, [prompt, selectedAspectRatio, numberOfVariations, generatedContent, generatedImages, error])
 
   const updateWorkflowStep = (stepName: string, status: WorkflowStep['status'], message?: string) => {
     setWorkflowSteps(prev => prev.map(step => 
@@ -81,41 +89,8 @@ export default function GoogleSEMGenerator({ isAuthenticated }: GoogleSEMGenerat
     ))
   }
 
-  const navigateToEditor = (imageUrl: string, imageName: string = 'Google SEM Image') => {
-    if (!imageUrl) return
-    
-    try {
-      console.log('🚀 Navigating to editor with image:', {
-        url: imageUrl.substring(0, 50) + '...',
-        name: imageName,
-        length: imageUrl.length,
-        isDataUrl: imageUrl.startsWith('data:')
-      })
-      
-      // For large data URLs, use sessionStorage instead of URL params to avoid length limits
-      if (imageUrl.length > 2000) {
-        console.log('📦 Using sessionStorage for large image data')
-        sessionStorage.setItem('editorImageData', imageUrl)
-        sessionStorage.setItem('editorImageName', imageName)
-        router.push('/editor?source=session')
-      } else {
-        // For smaller URLs, use URL parameters
-        const encodedImage = encodeURIComponent(imageUrl)
-        const encodedName = encodeURIComponent(imageName)
-        router.push(`/editor?ref=${encodedImage}&name=${encodedName}`)
-      }
-    } catch (error) {
-      console.error('Error navigating to editor:', error)
-      // Fallback to sessionStorage if URL encoding fails
-      try {
-        sessionStorage.setItem('editorImageData', imageUrl)
-        sessionStorage.setItem('editorImageName', imageName)
-        router.push('/editor?source=session')
-      } catch (storageError) {
-        console.error('Failed to use sessionStorage fallback:', storageError)
-        alert('Failed to open editor. The image may be too large.')
-      }
-    }
+  const handleNavigateToEditor = async (imageUrl: string, imageName: string = 'Google SEM Image') => {
+    await navigateToEditor({ imageUrl, imageName, router })
   }
 
   const generateGoogleSEM = async () => {
@@ -126,8 +101,7 @@ export default function GoogleSEMGenerator({ isAuthenticated }: GoogleSEMGenerat
 
     setError(null)
     setGeneratedContent('')
-    setOriginalImage(null)
-    setGoogleAdsImage(null)
+    setGeneratedImages([])
     
     // Reset all steps to pending
     setWorkflowSteps(prev => prev.map(step => ({ ...step, status: 'pending' })))
@@ -147,6 +121,7 @@ export default function GoogleSEMGenerator({ isAuthenticated }: GoogleSEMGenerat
         body: JSON.stringify({
           prompt: prompt.trim(),
           aspectRatio: selectedAspectRatio,
+          numberOfVariations,
         }),
         signal: controller.signal
       })
@@ -174,25 +149,19 @@ export default function GoogleSEMGenerator({ isAuthenticated }: GoogleSEMGenerat
       await new Promise(resolve => setTimeout(resolve, 1500))
       updateWorkflowStep('Generating Base Image', 'completed', 'Base image generated with Imagen 4')
       
-      // Fix image display - ensure proper data URL format
-      if (result.originalImageUrl) {
-        const originalImageDataUrl = result.originalImageUrl.startsWith('data:') 
-          ? result.originalImageUrl 
-          : `data:image/png;base64,${result.originalImageUrl}`
-        setOriginalImage(originalImageDataUrl)
-      }
-      
-      updateWorkflowStep('Creating Google Ads Variant', 'loading', 'Converting to Google Ads format with Nano Banana...')
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      
-      updateWorkflowStep('Creating Google Ads Variant', 'completed', 'Google Ads variant created with Nano Banana')
-      
-      // Fix Google Ads image display
-      if (result.googleAdsImageUrl && result.googleAdsImageUrl !== 'data:image/png;base64,google_ads_placeholder') {
-        const googleAdsImageDataUrl = result.googleAdsImageUrl.startsWith('data:') 
-          ? result.googleAdsImageUrl 
-          : `data:image/png;base64,${result.googleAdsImageUrl}`
-        setGoogleAdsImage(googleAdsImageDataUrl)
+      // Process generated images
+      if (result.images && Array.isArray(result.images)) {
+        const processedImages = result.images.map((img: any) => ({
+          ...img,
+          imageUrl: img.imageUrl && img.imageUrl !== 'placeholder' 
+            ? (img.imageUrl.startsWith('data:') ? img.imageUrl : `data:image/png;base64,${img.imageUrl}`)
+            : ''
+        }))
+        setGeneratedImages(processedImages)
+        
+        updateWorkflowStep('Creating Google Ads Variant', 'loading', 'Converting to Google Ads format with Nano Banana...')
+        await new Promise(resolve => setTimeout(resolve, 1000))
+        updateWorkflowStep('Creating Google Ads Variant', 'completed', 'Google Ads variant created with Nano Banana')
       }
       
       updateWorkflowStep('Finalizing', 'completed', 'Google SEM content ready!')
@@ -279,6 +248,29 @@ export default function GoogleSEMGenerator({ isAuthenticated }: GoogleSEMGenerat
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Number of Variations */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                <ImageIcon className="w-4 h-4" />
+                Number of Image Variations
+              </label>
+              <Select value={numberOfVariations.toString()} onValueChange={(value) => setNumberOfVariations(parseInt(value))}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select number of variations" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1">1 variation (recommended)</SelectItem>
+                  <SelectItem value="2">2 variations</SelectItem>
+                  <SelectItem value="3">3 variations</SelectItem>
+                  <SelectItem value="4">4 variations</SelectItem>
+                  <SelectItem value="5">5 variations</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-gray-500">
+                More variations give you more options to choose from, but take longer to generate
+              </p>
+            </div>
             
             <Button 
               onClick={generateGoogleSEM}
@@ -353,7 +345,7 @@ export default function GoogleSEMGenerator({ isAuthenticated }: GoogleSEMGenerat
       )}
 
       {/* Generated Results */}
-      {(generatedContent || originalImage || googleAdsImage) && (
+      {(generatedContent || generatedImages.length > 0) && (
         <div className="space-y-6">
           {/* Generated Content */}
           {generatedContent && (
@@ -372,151 +364,109 @@ export default function GoogleSEMGenerator({ isAuthenticated }: GoogleSEMGenerat
             </Card>
           )}
 
-          {/* Generated Images */}
-          {(originalImage || googleAdsImage) && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Original Image */}
-              {originalImage && (
-                <Card>
-                  <div className="bg-blue-600 text-white text-center py-2 rounded-t-lg">
-                    <h4 className="font-medium">Original Generated Image</h4>
-                  </div>
-                  <CardContent className="p-6">
-                    <div className="aspect-square bg-gray-100 rounded-lg flex items-center justify-center mb-4 overflow-hidden">
-                      <img 
-                        src={originalImage} 
-                        alt="AI-generated original image"
-                        className="w-full h-full object-cover rounded-lg cursor-pointer hover:opacity-90"
-                        loading="lazy"
-                        onClick={(e) => {
-                          e.preventDefault()
-                          console.log('Original image click:', originalImage?.substring(0, 50) + '...')
-                          openImageInNewTab(originalImage)
-                        }}
-                        onError={(e) => {
-                          console.error('Failed to load original image:', originalImage)
-                          e.currentTarget.alt = 'Failed to load generated image'
-                        }}
-                      />
+          {/* Generated Images Grid */}
+          {generatedImages.length > 0 && (
+            <div>
+              <div className="mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">Generated Images ({generatedImages.filter(img => img.imageUrl).length})</h3>
+                <p className="text-sm text-gray-600">Click on any image to view full size or edit</p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {generatedImages.map((image, index) => (
+                  <Card key={`${image.index}-${image.variation || 1}-${image.type || ''}`} className="relative">
+                    <div className={`text-white text-center py-2 rounded-t-lg ${
+                      image.type === 'google_ads' ? 'bg-green-600' : 'bg-blue-600'
+                    }`}>
+                      <h4 className="font-medium text-sm">
+                        {image.type === 'google_ads' ? 'Google Ads' : 'Original'} {Math.ceil(image.index / 2)}{image.variation && image.variation > 1 ? `.${image.variation}` : ''}
+                      </h4>
                     </div>
-                    <div className="space-y-2">
-                      <div className="flex gap-2">
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          className="flex-1 text-blue-600 hover:text-blue-700"
-                          onClick={() => openImageInNewTab(originalImage)}
-                        >
-                          <ImageIcon className="w-4 h-4 mr-2" />
-                          View Full Size
-                        </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          className="flex-1 text-green-600 hover:text-green-700"
-                          onClick={() => navigateToEditor(originalImage, 'Original SEM Image')}
-                        >
-                          <Edit3 className="w-4 h-4 mr-2" />
-                          Edit Image
-                        </Button>
-                        <DownloadImageButton
-                          imageUrl={originalImage}
-                          generator="google-sem"
-                          modelName="Imagen_4_Original"
-                          fileName="google_sem_original"
-                          variant="ghost"
-                          size="sm"
-                          className="flex-1 text-purple-600 hover:text-purple-700"
-                        >
-                          Download
-                        </DownloadImageButton>
+                    <CardContent className="p-4">
+                      <div className="aspect-square bg-gray-100 rounded-lg flex items-center justify-center mb-4 overflow-hidden">
+                        {image.imageUrl ? (
+                          <img 
+                            src={image.imageUrl} 
+                            alt={`AI-generated ${image.type === 'google_ads' ? 'Google Ads optimized' : 'original'} image ${Math.ceil(image.index / 2)}`}
+                            className="w-full h-full object-cover rounded-lg cursor-pointer hover:opacity-90"
+                            loading="lazy"
+                            onClick={() => openImageInNewTab(image.imageUrl)}
+                            onError={(e) => {
+                              console.error('Failed to load image:', image.imageUrl)
+                              e.currentTarget.alt = 'Failed to load generated image'
+                            }}
+                          />
+                        ) : image.error ? (
+                          <div className="text-center text-red-500 p-4">
+                            <p className="text-sm">Error: {image.error}</p>
+                          </div>
+                        ) : (
+                          <div className="text-center text-gray-500">
+                            <ImageIcon className="w-8 h-8 mx-auto mb-2" />
+                            <p className="text-sm">Image generation failed</p>
+                          </div>
+                        )}
                       </div>
-                      <SaveImageButton
-                        imageUrl={originalImage}
-                        generator="google-sem"
-                        modelName="Imagen 4 Original"
-                        className="w-full text-blue-600 hover:text-blue-700"
-                        disabled={!isAuthenticated}
-                      >
-                        Save Original Image
-                      </SaveImageButton>
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Google Ads Optimized Image */}
-              {googleAdsImage && (
-                <Card>
-                  <div className="bg-green-600 text-white text-center py-2 rounded-t-lg">
-                    <h4 className="font-medium">Google Ads Optimized</h4>
-                  </div>
-                  <CardContent className="p-6">
-                    <div className="aspect-square bg-gray-100 rounded-lg flex items-center justify-center mb-4 overflow-hidden">
-                      <img 
-                        src={googleAdsImage} 
-                        alt="Google Ads optimized image with white background"
-                        className="w-full h-full object-cover rounded-lg cursor-pointer hover:opacity-90"
-                        loading="lazy"
-                        onClick={(e) => {
-                          e.preventDefault()
-                          console.log('Google Ads image click:', googleAdsImage?.substring(0, 50) + '...')
-                          openImageInNewTab(googleAdsImage)
-                        }}
-                        onError={(e) => {
-                          console.error('Failed to load Google Ads image:', googleAdsImage)
-                          e.currentTarget.alt = 'Failed to load Google Ads optimized image'
-                        }}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <div className="flex gap-2">
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          className="flex-1 text-green-600 hover:text-green-700"
-                          onClick={() => openImageInNewTab(googleAdsImage)}
-                        >
-                          <ShoppingBag className="w-4 h-4 mr-2" />
-                          View Full Size
-                        </Button>
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          className="flex-1 text-purple-600 hover:text-purple-700"
-                          onClick={() => navigateToEditor(googleAdsImage, 'Google Ads Optimized Image')}
-                        >
-                          <Edit3 className="w-4 h-4 mr-2" />
-                          Edit Image
-                        </Button>
-                        <DownloadImageButton
-                          imageUrl={googleAdsImage}
-                          generator="google-sem"
-                          modelName="Imagen_4_GoogleAds"
-                          fileName="google_sem_optimized"
-                          variant="ghost"
-                          size="sm"
-                          className="flex-1 text-orange-600 hover:text-orange-700"
-                        >
-                          Download
-                        </DownloadImageButton>
+                      
+                      {/* Image Prompt Display */}
+                      <div className="mb-3 p-2 bg-gray-50 rounded text-xs text-gray-600">
+                        <p className="line-clamp-2">{image.prompt}</p>
                       </div>
-                      <SaveImageButton
-                        imageUrl={googleAdsImage}
-                        generator="google-sem"
-                        modelName="Imagen 4 Google Ads"
-                        className="w-full text-green-600 hover:text-green-700"
-                        disabled={!isAuthenticated}
-                      >
-                        Save Google Ads Image
-                      </SaveImageButton>
-                    </div>
-                    <div className="mt-2 text-xs text-gray-600 text-center">
-                      Optimized with white background via Nano Banana
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
+                      
+                      {image.imageUrl && (
+                        <div className="space-y-2">
+                          <div className="flex gap-2">
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className="flex-1 text-blue-600 hover:text-blue-700"
+                              onClick={() => openImageInNewTab(image.imageUrl)}
+                            >
+                              <ImageIcon className="w-4 h-4 mr-2" />
+                              View
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className="flex-1 text-blue-600 hover:text-blue-700"
+                              onClick={() => handleNavigateToEditor(image.imageUrl, `${image.type === 'google_ads' ? 'Google Ads' : 'Original'} SEM Image ${Math.ceil(image.index / 2)}`)}
+                            >
+                              <Edit3 className="w-4 h-4 mr-2" />
+                              Edit
+                            </Button>
+                            <DownloadImageButton
+                              imageUrl={image.imageUrl}
+                              generator="google-sem"
+                              modelName={image.type === 'google_ads' ? 'Imagen_4_GoogleAds' : 'Imagen_4_Original'}
+                              fileName={`google_sem_${image.type || 'image'}_${Math.ceil(image.index / 2)}`}
+                              variant="ghost"
+                              size="sm"
+                              className="flex-1 text-blue-600 hover:text-blue-700"
+                            >
+                              Download
+                            </DownloadImageButton>
+                          </div>
+                          <SaveImageButton
+                            imageUrl={image.imageUrl}
+                            generator="google-sem"
+                            modelName={image.type === 'google_ads' ? 'Imagen 4 Google Ads' : 'Imagen 4 Original'}
+                            promptUsed={image.prompt}
+                            aspectRatio={selectedAspectRatio}
+                            className="w-full text-blue-600 hover:text-blue-700"
+                            disabled={!isAuthenticated}
+                          >
+                            Save {image.type === 'google_ads' ? 'Google Ads' : 'Original'} Image
+                          </SaveImageButton>
+                          {image.type === 'google_ads' && (
+                            <div className="mt-1 text-xs text-gray-600 text-center">
+                              Optimized with white background via Nano Banana
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
             </div>
           )}
         </div>

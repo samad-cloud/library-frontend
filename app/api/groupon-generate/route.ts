@@ -18,7 +18,7 @@ const ASSISTANT_ID = 'asst_RmvnUzt5yRA64OBROEBzaKbU'
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { prompt, aspectRatio = '1:1' } = body
+    const { prompt, aspectRatio = '1:1', numberOfVariations = 1 } = body
 
     if (!prompt?.trim()) {
       return NextResponse.json(
@@ -30,6 +30,7 @@ export async function POST(request: NextRequest) {
     console.log('🎯 Starting Groupon Generation...')
     console.log('📝 Prompt:', prompt)
     console.log('📐 Aspect Ratio:', aspectRatio)
+    console.log('🖼️ Number of Variations:', numberOfVariations)
     console.log('🤖 Assistant ID:', ASSISTANT_ID)
 
     // Step 1-3: Create and Run Thread with Assistant (combined)
@@ -99,34 +100,52 @@ export async function POST(request: NextRequest) {
           model: 'imagen-4.0-generate-preview-06-06',
           prompt: prompt,
           config: {
-            numberOfImages: 1,
+            numberOfImages: numberOfVariations,
             aspectRatio: '16:9'
           }
         })
         
-        const imageBase64 = imageResult?.generatedImages?.[0]?.image?.imageBytes || ''
-        console.log(`✅ Image ${index + 1}/6 generated successfully`)
+        const generatedImages = imageResult?.generatedImages || []
+        console.log(`✅ Image ${index + 1}/6 generated successfully (${generatedImages.length} variations)`)
         
-        return {
+        // Return all variations for this prompt
+        const variations = generatedImages.map((img, varIndex) => ({
           index: index + 1,
+          variation: varIndex + 1,
           prompt: prompt,
-          imageUrl: imageBase64
+          imageUrl: img?.image?.imageBytes || '',
+          error: undefined as string | undefined
+        })).filter(img => img.imageUrl) // Only include successful generations
+        
+        // If no images generated, return error entry
+        if (generatedImages.length === 0) {
+          variations.push({
+            index: index + 1,
+            variation: 1,
+            prompt: prompt,
+            imageUrl: '',
+            error: 'No images generated'
+          })
         }
+        
+        return variations
       } catch (error) {
         console.error(`❌ Error generating image ${index + 1}:`, error)
-        return {
+        return [{
           index: index + 1,
+          variation: 1,
           prompt: prompt,
           imageUrl: '',
           error: error instanceof Error ? error.message : 'Unknown error'
-        }
+        }]
       }
     })
 
-    // Wait for all images to complete
-    const generatedImages = await Promise.all(imageGenerationPromises)
+    // Wait for all images to complete and flatten the array
+    const imageResults = await Promise.all(imageGenerationPromises)
+    const generatedImages = imageResults.flat()
     
-    console.log(`✅ All 6 images generation completed. Successful: ${generatedImages.filter(img => img.imageUrl).length}/6`)
+    console.log(`✅ All images generation completed. Total variations: ${generatedImages.length}, Successful: ${generatedImages.filter(img => img.imageUrl).length}`)
     
     console.log('🎉 Groupon generation completed successfully')
 

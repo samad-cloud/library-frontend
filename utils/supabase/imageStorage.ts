@@ -7,11 +7,13 @@ import { createClient } from './client'
 export interface SaveImageOptions {
   imageUrl: string
   fileName?: string
-  generator?: 'social-media' | 'email-marketing' | 'google-sem' | 'groupon'
+  generator?: 'social-media' | 'email-marketing' | 'google-sem' | 'groupon' | 'editor'
   modelName?: string
   userId?: string
   promptUsed?: string
   aspectRatio?: string
+  isEditedImage?: boolean // Flag to indicate this is an edited image from the editor
+  originalPrompt?: string // Original prompt if this was derived from another image
 }
 
 export interface SaveImageResult {
@@ -79,7 +81,9 @@ export async function saveGeneratedImage(options: SaveImageOptions): Promise<Sav
     const fileName = options.fileName || defaultFileName
 
     // Create the storage path using existing bucket structure
-    const storagePath = `generated/${userId}/${fileName}`
+    // For edited images, use the editor folder
+    const folder = options.isEditedImage ? 'editor' : 'generated'
+    const storagePath = `${folder}/${userId}/${fileName}`
 
     let buffer: Buffer
     let contentType: string
@@ -128,13 +132,15 @@ export async function saveGeneratedImage(options: SaveImageOptions): Promise<Sav
           description: options.promptUsed ? `Generated from prompt: ${options.promptUsed}` : null,
           prompt_used: options.promptUsed,
           model_name: options.modelName || 'gemini-imagen',
-          generation_source: 'manual',
+          generation_source: options.isEditedImage ? 'editor' : 'manual',
           generation_metadata: {
             generator_type: options.generator,
             aspect_ratio: options.aspectRatio,
             storage_path: data.path,
             file_size: buffer.length,
-            mime_type: contentType
+            mime_type: contentType,
+            is_edited_image: options.isEditedImage || false,
+            original_prompt: options.originalPrompt || null
           },
           format: contentType.split('/')[1] || 'png',
           bytes: buffer.length,
@@ -188,6 +194,28 @@ export async function saveMultipleImages(
 }
 
 /**
+ * Saves an edited image from the image editor to Supabase storage
+ */
+export async function saveEditedImage(options: {
+  imageUrl: string
+  fileName?: string
+  instruction?: string // The editing instruction used
+  originalImageName?: string
+  userId?: string
+}): Promise<SaveImageResult> {
+  return saveGeneratedImage({
+    imageUrl: options.imageUrl,
+    fileName: options.fileName,
+    generator: 'editor',
+    modelName: 'imagen-editor',
+    userId: options.userId,
+    promptUsed: options.instruction,
+    isEditedImage: true,
+    originalPrompt: options.originalImageName
+  })
+}
+
+/**
  * Get all saved images for a user from the images table
  */
 export async function getSavedImages(userId?: string, generator?: string): Promise<{ images: any[]; error?: string }> {
@@ -203,20 +231,128 @@ export async function getSavedImages(userId?: string, generator?: string): Promi
       userId = user.id
     }
 
-    // Build query for images table
+    // Build query for images table - include manual and editor generation_source
     let query = supabase
       .from('images')
       .select('*')
-      .eq('generation_source', 'manual')
+      .in('generation_source', ['manual', 'editor'])
       .order('created_at', { ascending: false })
       .limit(100)
 
-    // Filter by generator type if specified
+    // Filter by generator type if specified (including 'editor' for edited images)
     if (generator) {
       query = query.contains('generation_metadata', { generator_type: generator })
     }
 
     const { data, error } = await query
+
+    if (error) {
+      return { images: [], error: error.message }
+    }
+
+    return { images: data || [] }
+  } catch (error) {
+    return { 
+      images: [], 
+      error: error instanceof Error ? error.message : 'Unknown error occurred' 
+    }
+  }
+}
+
+/**
+ * Upload image to temporary editor-cleanup bucket for editor navigation
+ * This allows passing a simple URL instead of large base64 data
+ */
+export async function uploadToEditorCleanup(imageUrl: string, imageName: string = 'temp-image'): Promise<{ success: boolean; publicUrl?: string; error?: string }> {
+  try {
+    const supabase = createClient()
+    
+    // Get current user for path organization
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+      return { success: false, error: 'User not authenticated' }
+    }
+
+    let buffer: Buffer
+    let contentType: string
+
+    // Handle different image URL formats
+    if (imageUrl.startsWith('data:') || imageUrl.match(/^[A-Za-z0-9+/]+=*$/)) {
+      // Data URL or base64 string
+      const result = dataUrlToBuffer(imageUrl)
+      buffer = result.buffer
+      contentType = result.contentType
+    } else if (imageUrl.startsWith('http')) {
+      // External URL
+      const result = await urlToBuffer(imageUrl)
+      buffer = result.buffer
+      contentType = result.contentType
+    } else {
+      return { success: false, error: 'Invalid image URL format' }
+    }
+
+    // Create unique filename with timestamp
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+    const cleanName = imageName.replace(/[^a-zA-Z0-9-_]/g, '_')
+    const fileName = `${cleanName}_${timestamp}.png`
+    const storagePath = `${user.id}/${fileName}`
+
+    // Upload to editor-cleanup bucket
+    const { data, error } = await supabase.storage
+      .from('editor-cleanup')
+      .upload(storagePath, buffer, {
+        contentType,
+        upsert: false,
+        cacheControl: '3600'
+      })
+
+    if (error) {
+      console.error('Failed to upload to editor-cleanup:', error)
+      return { success: false, error: `Upload failed: ${error.message}` }
+    }
+
+    // Get the public URL
+    const { data: urlData } = supabase.storage
+      .from('editor-cleanup')
+      .getPublicUrl(data.path)
+
+    return {
+      success: true,
+      publicUrl: urlData.publicUrl
+    }
+
+  } catch (error) {
+    console.error('Error uploading to editor-cleanup:', error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error occurred'
+    }
+  }
+}
+
+/**
+ * Get only edited images from the editor
+ */
+export async function getSavedEditedImages(userId?: string): Promise<{ images: any[]; error?: string }> {
+  try {
+    const supabase = createClient()
+    
+    // Get current user if not provided
+    if (!userId) {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        return { images: [], error: 'User not authenticated' }
+      }
+      userId = user.id
+    }
+
+    // Query specifically for editor images
+    const { data, error } = await supabase
+      .from('images')
+      .select('*')
+      .eq('generation_source', 'editor')
+      .order('created_at', { ascending: false })
+      .limit(100)
 
     if (error) {
       return { images: [], error: error.message }

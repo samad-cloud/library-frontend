@@ -18,7 +18,7 @@ const ASSISTANT_ID = 'asst_tMb6dYkeLo83T67GcdqTmGQL'
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { prompt, aspectRatio = '1:1' } = body
+    const { prompt, aspectRatio = '1:1', numberOfVariations = 1 } = body
 
     if (!prompt?.trim()) {
       return NextResponse.json(
@@ -94,29 +94,42 @@ export async function POST(request: NextRequest) {
       model: 'imagen-4.0-generate-preview-06-06',
       prompt: finalPrompt,
       config: {
-        numberOfImages: 1,
+        numberOfImages: numberOfVariations,
         aspectRatio: aspectRatio
       }
     })
 
     console.log('✅ Imagen 4 image generation completed')
 
-    // Extract the image from Imagen 4 response
-    const imageBase64 = imageResult?.generatedImages?.[0]?.image?.imageBytes || ''
-    
-    if (imageBase64) {
-      console.log('🖼️ Received generated image from Imagen 4')
+    // Process all generated images
+    const images = []
+    if (imageResult?.generatedImages) {
+      for (const [index, generatedImage] of imageResult.generatedImages.entries()) {
+        let imgBytes = generatedImage?.image?.imageBytes;
+        if (imgBytes) {
+          const buffer = Buffer.from(imgBytes, "base64");
+          images.push({
+            index: index + 1,
+            variation: 1, // Email marketing only has one prompt, so all are variation 1
+            prompt: finalPrompt,
+            imageUrl: imgBytes
+          })
+        }
+      }
     }
     
+    console.log(`🖼️ Processed ${images.length} generated images from Imagen 4`)
     console.log('🎉 Email marketing generation completed successfully')
 
     return NextResponse.json({
       success: true,
       content: generatedContent,
-      imageUrl: imageBase64,
+      images: images,
       threadId: runStatus.thread_id,
       aspectRatio: aspectRatio,
-      assistantId: ASSISTANT_ID
+      assistantId: ASSISTANT_ID,
+      totalImages: images.length,
+      successfulImages: images.filter(img => img.imageUrl).length
     })
 
   } catch (error) {

@@ -13,6 +13,7 @@ import {
   STORAGE_KEYS,
   type EmailMarketingGeneratorState 
 } from '@/lib/sessionStorage'
+import { navigateToEditor } from '@/lib/editorNavigation'
 import SaveImageButton from '@/components/shared/SaveImageButton'
 import DownloadImageButton from '@/components/shared/DownloadImageButton'
 
@@ -31,8 +32,15 @@ export default function EmailMarketingGenerator({ isAuthenticated }: EmailMarket
   const router = useRouter()
   const [prompt, setPrompt] = useState('')
   const [selectedAspectRatio, setSelectedAspectRatio] = useState('1:1')
+  const [numberOfVariations, setNumberOfVariations] = useState(1)
   const [generatedContent, setGeneratedContent] = useState('')
-  const [generatedImage, setGeneratedImage] = useState<string | null>(null)
+  const [generatedImages, setGeneratedImages] = useState<Array<{
+    index: number;
+    variation?: number;
+    prompt: string;
+    imageUrl: string;
+    error?: string;
+  }>>([]);
   const [error, setError] = useState<string | null>(null)
   const [workflowSteps, setWorkflowSteps] = useState<WorkflowStep[]>([
     { name: 'Creating Thread', status: 'pending', icon: MessageSquare },
@@ -47,8 +55,9 @@ export default function EmailMarketingGenerator({ isAuthenticated }: EmailMarket
     if (savedState) {
       setPrompt(savedState.prompt)
       setSelectedAspectRatio(savedState.selectedAspectRatio)
+      setNumberOfVariations(savedState.numberOfVariations || 1)
       setGeneratedContent(savedState.generatedContent)
-      setGeneratedImage(savedState.generatedImage)
+      setGeneratedImages(savedState.generatedImages || [])
       setError(savedState.error)
       // Don't restore workflowSteps from storage as icons can't be serialized
       // They will be reset to their initial state
@@ -61,13 +70,14 @@ export default function EmailMarketingGenerator({ isAuthenticated }: EmailMarket
     const stateToSave: EmailMarketingGeneratorState = {
       prompt,
       selectedAspectRatio,
+      numberOfVariations,
       generatedContent,
-      generatedImage,
+      generatedImages,
       error,
       workflowSteps: [] // Don't save workflow steps as they contain React components
     }
     saveToSessionStorage(STORAGE_KEYS.EMAIL_MARKETING, stateToSave)
-  }, [prompt, selectedAspectRatio, generatedContent, generatedImage, error])
+  }, [prompt, selectedAspectRatio, numberOfVariations, generatedContent, generatedImages, error])
 
   const updateWorkflowStep = (stepName: string, status: WorkflowStep['status'], message?: string) => {
     setWorkflowSteps(prev => prev.map(step => 
@@ -77,19 +87,8 @@ export default function EmailMarketingGenerator({ isAuthenticated }: EmailMarket
     ))
   }
 
-  const navigateToEditor = (imageUrl: string, imageName: string = 'Email Marketing Image') => {
-    if (!imageUrl) return
-    
-    try {
-      // Encode the image data for URL transmission
-      const encodedImage = encodeURIComponent(imageUrl)
-      const encodedName = encodeURIComponent(imageName)
-      
-      // Navigate to editor with reference image
-      router.push(`/editor?ref=${encodedImage}&name=${encodedName}`)
-    } catch (error) {
-      console.error('Error navigating to editor:', error)
-    }
+  const handleNavigateToEditor = async (imageUrl: string, imageName: string = 'Email Marketing Image') => {
+    await navigateToEditor({ imageUrl, imageName, router })
   }
 
   const generateEmailMarketing = async () => {
@@ -100,7 +99,7 @@ export default function EmailMarketingGenerator({ isAuthenticated }: EmailMarket
 
     setError(null)
     setGeneratedContent('')
-    setGeneratedImage(null)
+    setGeneratedImages([])
     
     // Reset all steps to pending
     setWorkflowSteps(prev => prev.map(step => ({ ...step, status: 'pending' })))
@@ -117,6 +116,7 @@ export default function EmailMarketingGenerator({ isAuthenticated }: EmailMarket
         body: JSON.stringify({
           prompt: prompt.trim(),
           aspectRatio: selectedAspectRatio,
+          numberOfVariations,
         })
       })
 
@@ -143,12 +143,15 @@ export default function EmailMarketingGenerator({ isAuthenticated }: EmailMarket
       await new Promise(resolve => setTimeout(resolve, 1500))
       updateWorkflowStep('Generating Image', 'completed', 'Image generated with Imagen 4')
       
-      // Fix image display - ensure proper data URL format
-      if (result.imageUrl && result.imageUrl !== 'placeholder') {
-        const imageDataUrl = result.imageUrl.startsWith('data:') 
-          ? result.imageUrl 
-          : `data:image/png;base64,${result.imageUrl}`
-        setGeneratedImage(imageDataUrl)
+      // Process generated images
+      if (result.images && Array.isArray(result.images)) {
+        const processedImages = result.images.map((img: any) => ({
+          ...img,
+          imageUrl: img.imageUrl && img.imageUrl !== 'placeholder' 
+            ? (img.imageUrl.startsWith('data:') ? img.imageUrl : `data:image/png;base64,${img.imageUrl}`)
+            : ''
+        }))
+        setGeneratedImages(processedImages)
       }
       
       updateWorkflowStep('Finalizing', 'completed', 'Email marketing content ready!')
@@ -235,6 +238,29 @@ export default function EmailMarketingGenerator({ isAuthenticated }: EmailMarket
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Number of Variations */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                <ImageIcon className="w-4 h-4" />
+                Number of Image Variations
+              </label>
+              <Select value={numberOfVariations.toString()} onValueChange={(value) => setNumberOfVariations(parseInt(value))}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select number of variations" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1">1 variation (recommended)</SelectItem>
+                  <SelectItem value="2">2 variations</SelectItem>
+                  <SelectItem value="3">3 variations</SelectItem>
+                  <SelectItem value="4">4 variations</SelectItem>
+                  <SelectItem value="5">5 variations</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-gray-500">
+                More variations give you more options to choose from, but take longer to generate
+              </p>
+            </div>
             
             <Button 
               onClick={generateEmailMarketing}
@@ -309,7 +335,7 @@ export default function EmailMarketingGenerator({ isAuthenticated }: EmailMarket
       )}
 
       {/* Generated Results */}
-      {(generatedContent || generatedImage) && (
+      {(generatedContent || generatedImages.length > 0) && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Generated Content */}
           {generatedContent && (
@@ -328,70 +354,103 @@ export default function EmailMarketingGenerator({ isAuthenticated }: EmailMarket
             </Card>
           )}
 
-          {/* Generated Image */}
-          {generatedImage && (
-            <Card>
-              <div className="bg-blue-600 text-white text-center py-2 rounded-t-lg">
-                <h4 className="font-medium">Generated Image</h4>
+          {/* Generated Images Grid */}
+          {generatedImages.length > 0 && (
+            <div className="md:col-span-2">
+              <div className="mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">Generated Images ({generatedImages.filter(img => img.imageUrl).length})</h3>
+                <p className="text-sm text-gray-600">Click on any image to view full size or edit</p>
               </div>
-              <CardContent className="p-6">
-                <div className="aspect-square bg-gray-100 rounded-lg flex items-center justify-center mb-4 overflow-hidden">
-                  <img 
-                    src={generatedImage} 
-                    alt="AI-generated email marketing image"
-                    className="w-full h-full object-cover rounded-lg cursor-pointer hover:opacity-90"
-                    loading="lazy"
-                    onClick={() => openImageInNewTab(generatedImage)}
-                    onError={(e) => {
-                      console.error('Failed to load image:', generatedImage)
-                      e.currentTarget.alt = 'Failed to load generated image'
-                    }}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <div className="flex gap-2">
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className="flex-1 text-blue-600 hover:text-blue-700"
-                      onClick={() => openImageInNewTab(generatedImage)}
-                    >
-                      <ImageIcon className="w-4 h-4 mr-2" />
-                      View Full Size
-                    </Button>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className="flex-1 text-green-600 hover:text-green-700"
-                      onClick={() => navigateToEditor(generatedImage, 'Email Marketing Image')}
-                    >
-                      <Edit3 className="w-4 h-4 mr-2" />
-                      Edit Image
-                    </Button>
-                    <DownloadImageButton
-                      imageUrl={generatedImage}
-                      generator="email-marketing"
-                      modelName="Imagen_4"
-                      fileName="email_marketing_image"
-                      variant="ghost"
-                      size="sm"
-                      className="flex-1 text-purple-600 hover:text-purple-700"
-                    >
-                      Download
-                    </DownloadImageButton>
-                  </div>
-                  <SaveImageButton
-                    imageUrl={generatedImage}
-                    generator="email-marketing"
-                    modelName="Imagen 4"
-                    className="w-full text-blue-600 hover:text-blue-700"
-                    disabled={!isAuthenticated}
-                  >
-                    Save to Library
-                  </SaveImageButton>
-                </div>
-              </CardContent>
-            </Card>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {generatedImages.map((image, index) => (
+                  <Card key={`${image.index}-${image.variation || 1}`} className="relative">
+                    <div className="bg-blue-600 text-white text-center py-2 rounded-t-lg">
+                      <h4 className="font-medium text-sm">
+                        Image {image.index}{image.variation && image.variation > 1 ? `.${image.variation}` : ''}
+                      </h4>
+                    </div>
+                    <CardContent className="p-4">
+                      <div className="aspect-square bg-gray-100 rounded-lg flex items-center justify-center mb-4 overflow-hidden">
+                        {image.imageUrl ? (
+                          <img 
+                            src={image.imageUrl} 
+                            alt={`AI-generated email marketing image ${image.index}`}
+                            className="w-full h-full object-cover rounded-lg cursor-pointer hover:opacity-90"
+                            loading="lazy"
+                            onClick={() => openImageInNewTab(image.imageUrl)}
+                            onError={(e) => {
+                              console.error('Failed to load image:', image.imageUrl)
+                              e.currentTarget.alt = 'Failed to load generated image'
+                            }}
+                          />
+                        ) : image.error ? (
+                          <div className="text-center text-red-500 p-4">
+                            <p className="text-sm">Error: {image.error}</p>
+                          </div>
+                        ) : (
+                          <div className="text-center text-gray-500">
+                            <ImageIcon className="w-8 h-8 mx-auto mb-2" />
+                            <p className="text-sm">Image generation failed</p>
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* Image Prompt Display */}
+                      <div className="mb-3 p-2 bg-gray-50 rounded text-xs text-gray-600">
+                        <p className="line-clamp-2">{image.prompt}</p>
+                      </div>
+                      
+                      {image.imageUrl && (
+                        <div className="space-y-2">
+                          <div className="flex gap-2">
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className="flex-1 text-blue-600 hover:text-blue-700"
+                              onClick={() => openImageInNewTab(image.imageUrl)}
+                            >
+                              <ImageIcon className="w-4 h-4 mr-2" />
+                              View
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className="flex-1 text-blue-600 hover:text-blue-700"
+                              onClick={() => handleNavigateToEditor(image.imageUrl, `Email Marketing Image ${image.index}`)}
+                            >
+                              <Edit3 className="w-4 h-4 mr-2" />
+                              Edit
+                            </Button>
+                            <DownloadImageButton
+                              imageUrl={image.imageUrl}
+                              generator="email-marketing"
+                              modelName="Imagen_4"
+                              fileName={`email_marketing_image_${image.index}`}
+                              variant="ghost"
+                              size="sm"
+                              className="flex-1 text-blue-600 hover:text-blue-700"
+                            >
+                              Download
+                            </DownloadImageButton>
+                          </div>
+                          <SaveImageButton
+                            imageUrl={image.imageUrl}
+                            generator="email-marketing"
+                            modelName="Imagen 4"
+                            promptUsed={image.prompt}
+                            aspectRatio={selectedAspectRatio}
+                            className="w-full text-blue-600 hover:text-blue-700"
+                            disabled={!isAuthenticated}
+                          >
+                            Save Image {image.index}
+                          </SaveImageButton>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
           )}
         </div>
       )}

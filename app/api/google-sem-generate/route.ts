@@ -18,7 +18,7 @@ const ASSISTANT_ID = 'asst_4nGR0L10K8L2NOAJ7IlBksvx'
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { prompt, aspectRatio = '1:1' } = body
+    const { prompt, aspectRatio = '1:1', numberOfVariations = 1 } = body
 
     if (!prompt?.trim()) {
       return NextResponse.json(
@@ -94,24 +94,25 @@ export async function POST(request: NextRequest) {
       model: 'imagen-4.0-generate-preview-06-06',
       prompt: finalPrompt,
       config: {
-        numberOfImages: 1,
+        numberOfImages: numberOfVariations,
         aspectRatio: aspectRatio
       }
     })
-    const imageUrl = imageResult?.generatedImages?.[0]?.image?.imageBytes
 
-    console.log('✅ Original image generated successfully')
+    console.log('✅ Original images generated successfully')
 
-    // Use the imageUrl as the originalImageUrl
-    const originalImageUrl = imageUrl
+    // Process all generated images
+    const images = []
+    if (imageResult?.generatedImages) {
+      for (const [index, generatedImage] of imageResult.generatedImages.entries()) {
+        let imgBytes = generatedImage?.image?.imageBytes;
+        if (imgBytes) {
+          const buffer = Buffer.from(imgBytes, "base64");
 
-    // Safely convert imageUrl (base64 string) to base64, handling undefined
-    const originalImageBase64 = imageUrl ? Buffer.from(imageUrl, 'base64').toString('base64') : ''
-
-    // Step 6: Convert to Google Ads format using Nano Banana
-    console.log('🍌 Converting to Google Ads format with Nano Banana...')
-    
-    const googleAdsPrompt = `{
+          // Step 6: Convert to Google Ads format using Nano Banana
+          console.log(`🍌 Converting image ${index + 1} to Google Ads format with Nano Banana...`)
+          
+          const googleAdsPrompt = `{
   "task": "Convert product photo into a Google Ads–ready image",
   "requirements": {
     "preprocessing": {
@@ -142,50 +143,95 @@ export async function POST(request: NextRequest) {
 
     `
     
-    const edit_prompt = [
-      { text: googleAdsPrompt },
-      {
-        inlineData: {
-          mimeType: "image/png",
-          data: originalImageBase64
+          const edit_prompt = [
+            { text: googleAdsPrompt },
+            {
+              inlineData: {
+                mimeType: "image/png",
+                data: imgBytes
+              }
+            }
+          ]
+    
+          try {
+            const nanoBananaResult = await genAI.models.generateContent({
+              model: 'gemini-2.5-flash-image-preview',
+              contents: [{
+                role: 'user',
+                parts: edit_prompt
+              }],
+            })
+
+            let googleAdsImageUrl = ''
+            
+            if (nanoBananaResult?.candidates?.[0]?.content?.parts) {
+              for (const part of nanoBananaResult.candidates[0].content.parts) {
+                if (part.inlineData && part.inlineData.mimeType?.includes('image')) {
+                  googleAdsImageUrl = part.inlineData.data || ''
+                  break
+                }
+              }
+            }
+
+            if (!googleAdsImageUrl) {
+              console.log(`⚠️ Nano Banana conversion failed for image ${index + 1}, using original image`)
+              googleAdsImageUrl = imgBytes
+            }
+
+            // Add original image
+            images.push({
+              index: (index * 2) + 1,
+              variation: 1,
+              prompt: finalPrompt,
+              imageUrl: imgBytes,
+              type: 'original'
+            })
+
+            // Add Google Ads version
+            images.push({
+              index: (index * 2) + 2,
+              variation: 1,
+              prompt: `Google Ads version: ${finalPrompt}`,
+              imageUrl: googleAdsImageUrl,
+              type: 'google_ads'
+            })
+
+            console.log(`✅ Image ${index + 1} processing completed successfully`)
+            
+          } catch (error) {
+            console.error(`❌ Error processing image ${index + 1}:`, error)
+            // Still add the original image even if conversion fails
+            images.push({
+              index: (index * 2) + 1,
+              variation: 1,
+              prompt: finalPrompt,
+              imageUrl: imgBytes,
+              type: 'original'
+            })
+            images.push({
+              index: (index * 2) + 2,
+              variation: 1,
+              prompt: `Google Ads version: ${finalPrompt}`,
+              imageUrl: imgBytes, // Use original as fallback
+              type: 'google_ads',
+              error: 'Conversion failed, showing original'
+            })
+          }
         }
       }
-    ]
-    
-    const nanoBananaResult = await genAI.models.generateContent({
-      model: 'gemini-2.5-flash-image-preview',
-      contents: edit_prompt,
-    })
-
-    console.log('✅ Google Ads variant created with Nano Banana')
-
-    // For Nano Banana image editing, we need to use a different approach
-    // Since Nano Banana returns text instructions, we'll use those instructions 
-    // to generate a new image with Imagen 4
-    let nanoBananabuffer: Buffer | null = null
-    const nanoBananaInstructions = nanoBananaResult?.candidates?.[0]?.content?.parts?.[0]?.text
-    const parts = nanoBananaResult?.candidates?.[0]?.content?.parts || []
-    for (const part of parts) {
-      if (part.text) {
-        console.log(part.text);
-      } else if (part.inlineData?.data) {
-        const imageData = part.inlineData.data;
-        nanoBananabuffer = Buffer.from(imageData, "base64");
-        
-      }
     }
-    let googleAdsImageUrl: string | null = null
-    googleAdsImageUrl = nanoBananabuffer ? nanoBananabuffer.toString('base64') : null
     
+    console.log(`🖼️ Processed ${images.length} images (${images.length / 2} originals + ${images.length / 2} Google Ads versions)`)
     console.log('🎉 Google SEM generation completed successfully')
 
     return NextResponse.json({
       success: true,
       content: generatedContent,
-      originalImageUrl: originalImageBase64,
-      googleAdsImageUrl: googleAdsImageUrl,
+      images: images,
       threadId: runStatus.thread_id,
-      aspectRatio: aspectRatio
+      aspectRatio: aspectRatio,
+      totalImages: images.length,
+      successfulImages: images.filter(img => img.imageUrl).length
     })
 
   } catch (error) {

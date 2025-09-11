@@ -15,6 +15,7 @@ import {
   STORAGE_KEYS,
   type SocialMediaGeneratorState 
 } from '@/lib/sessionStorage'
+import { navigateToEditor } from '@/lib/editorNavigation'
 import SaveImageButton from '@/components/shared/SaveImageButton'
 import DownloadImageButton from '@/components/shared/DownloadImageButton'
 
@@ -118,19 +119,12 @@ export default function SocialMediaGenerator({ isAuthenticated }: SocialMediaGen
     }
   }
 
-  const navigateToEditor = (imageUrl: string, modelName: string = 'Social Media Image') => {
-    if (!imageUrl) return
-    
-    try {
-      // Encode the image data for URL transmission
-      const encodedImage = encodeURIComponent(imageUrl)
-      const encodedName = encodeURIComponent(`${modelName} - Social Media`)
-      
-      // Navigate to editor with reference image
-      router.push(`/editor?ref=${encodedImage}&name=${encodedName}`)
-    } catch (error) {
-      console.error('Error navigating to editor:', error)
-    }
+  const handleNavigateToEditor = async (imageUrl: string, modelName: string = 'Social Media Image') => {
+    await navigateToEditor({ 
+      imageUrl, 
+      imageName: `${modelName} - Social Media`, 
+      router 
+    })
   }
 
   const enhancePrompt = async () => {
@@ -432,7 +426,7 @@ export default function SocialMediaGenerator({ isAuthenticated }: SocialMediaGen
                         variant="ghost" 
                         size="sm" 
                         className="flex-1 text-green-600 hover:text-green-700"
-                        onClick={() => navigateToEditor(modelResult.imageUrls[0], model.name)}
+                        onClick={() => handleNavigateToEditor(modelResult.imageUrls[0], model.name)}
                       >
                         <Edit3 className="w-4 h-4 mr-2" />
                         Edit Image
@@ -494,7 +488,7 @@ export default function SocialMediaGenerator({ isAuthenticated }: SocialMediaGen
                               className="h-6 w-6 p-0 text-white hover:text-green-200"
                               onClick={(e) => {
                                 e.stopPropagation()
-                                navigateToEditor(url, `${model.name} Variant ${index + 2}`)
+                                handleNavigateToEditor(url, `${model.name} Variant ${index + 2}`)
                               }}
                             >
                               <Edit3 className="w-3 h-3" />
