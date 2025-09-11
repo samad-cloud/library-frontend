@@ -1,0 +1,21 @@
+{
+  "name": "image-dimensions-updater",
+  "version": "1.0.0",
+  "description": "One-time script to update image dimensions in the images table",
+  "type": "module",
+  "main": "update-image-dimensions.js",
+  "scripts": {
+    "start": "node update-image-dimensions.js",
+    "update-dimensions": "node update-image-dimensions.js",
+    "standardize-models": "node standardize-model-names.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.38.0",
+    "node-fetch": "^3.3.2",
+    "sharp": "^0.32.6",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.8.0"
+  }
+}

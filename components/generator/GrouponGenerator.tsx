@@ -417,7 +417,7 @@ export default function GrouponGenerator({ isAuthenticated }: GrouponGeneratorPr
                             <DownloadImageButton
                               imageUrl={image.imageUrl}
                               generator="groupon"
-                              modelName="Imagen_4"
+                              modelName="imagen-4.0-generate-preview-06-06"
                               fileName={`groupon_image_${image.index}`}
                               variant="ghost"
                               size="sm"
@@ -429,7 +429,7 @@ export default function GrouponGenerator({ isAuthenticated }: GrouponGeneratorPr
                           <SaveImageButton
                             imageUrl={image.imageUrl}
                             generator="groupon"
-                            modelName="Imagen 4"
+                            modelName="imagen-4.0-generate-preview-06-06"
                             promptUsed={image.prompt}
                             aspectRatio="16:9"
                             className="w-full text-green-600 hover:text-green-700"

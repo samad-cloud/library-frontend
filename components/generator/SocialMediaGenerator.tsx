@@ -19,6 +19,16 @@ import { navigateToEditor } from '@/lib/editorNavigation'
 import SaveImageButton from '@/components/shared/SaveImageButton'
 import DownloadImageButton from '@/components/shared/DownloadImageButton'
 
+// Helper function to get standard model name for database storage
+const getStandardModelName = (modelId: string): string => {
+  const modelNameMap: { [key: string]: string } = {
+    'geminiImagen3': 'imagen-3.0-generate-002',
+    'geminiImagen4': 'imagen-4.0-generate-preview-06-06', 
+    'geminiImagen4Ultra': 'imagen-4.0-generate-preview-06-06'
+  }
+  return modelNameMap[modelId] || 'imagen-4.0-generate-preview-06-06'
+}
+
 interface SocialMediaGeneratorProps {
   isAuthenticated?: boolean
 }
@@ -434,7 +444,7 @@ export default function SocialMediaGenerator({ isAuthenticated }: SocialMediaGen
                       <DownloadImageButton
                         imageUrl={modelResult.imageUrls[0]}
                         generator="social-media"
-                        modelName={model.name.replace(/\s+/g, '_')}
+                        modelName={getStandardModelName(model.id)}
                         fileName={`social_media_${model.name.toLowerCase().replace(/\s+/g, '_')}`}
                         variant="ghost"
                         size="sm"
@@ -446,7 +456,7 @@ export default function SocialMediaGenerator({ isAuthenticated }: SocialMediaGen
                     <SaveImageButton
                       imageUrl={modelResult.imageUrls[0]}
                       generator="social-media"
-                      modelName={model.name}
+                      modelName={getStandardModelName(model.id)}
                       className="w-full text-blue-600 hover:text-blue-700"
                       disabled={!isAuthenticated}
                     >
@@ -496,7 +506,7 @@ export default function SocialMediaGenerator({ isAuthenticated }: SocialMediaGen
                             <DownloadImageButton
                               imageUrl={url}
                               generator="social-media"
-                              modelName={model.name.replace(/\s+/g, '_')}
+                              modelName={getStandardModelName(model.id)}
                               fileName={`social_media_${model.name.toLowerCase().replace(/\s+/g, '_')}_variant_${index + 2}`}
                               variant="ghost"
                               size="sm"

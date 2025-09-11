@@ -424,7 +424,7 @@ export default function EmailMarketingGenerator({ isAuthenticated }: EmailMarket
                             <DownloadImageButton
                               imageUrl={image.imageUrl}
                               generator="email-marketing"
-                              modelName="Imagen_4"
+                              modelName="imagen-4.0-generate-preview-06-06"
                               fileName={`email_marketing_image_${image.index}`}
                               variant="ghost"
                               size="sm"
@@ -436,7 +436,7 @@ export default function EmailMarketingGenerator({ isAuthenticated }: EmailMarket
                           <SaveImageButton
                             imageUrl={image.imageUrl}
                             generator="email-marketing"
-                            modelName="Imagen 4"
+                            modelName="imagen-4.0-generate-preview-06-06"
                             promptUsed={image.prompt}
                             aspectRatio={selectedAspectRatio}
                             className="w-full text-blue-600 hover:text-blue-700"

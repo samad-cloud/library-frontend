@@ -131,7 +131,7 @@ export async function saveGeneratedImage(options: SaveImageOptions): Promise<Sav
           title: fileName || `Generated ${options.generator || 'image'}`,
           description: options.promptUsed ? `Generated from prompt: ${options.promptUsed}` : null,
           prompt_used: options.promptUsed,
-          model_name: options.modelName || 'gemini-imagen',
+          model_name: options.modelName || 'imagen-4.0-generate-preview-06-06',
           generation_source: options.isEditedImage ? 'editor' : 'manual',
           generation_metadata: {
             generator_type: options.generator,
@@ -207,7 +207,7 @@ export async function saveEditedImage(options: {
     imageUrl: options.imageUrl,
     fileName: options.fileName,
     generator: 'editor',
-    modelName: 'imagen-editor',
+    modelName: 'gemini-2.5-flash-image-preview',
     userId: options.userId,
     promptUsed: options.instruction,
     isEditedImage: true,

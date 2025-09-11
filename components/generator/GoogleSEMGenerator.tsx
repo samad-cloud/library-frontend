@@ -436,7 +436,7 @@ export default function GoogleSEMGenerator({ isAuthenticated }: GoogleSEMGenerat
                             <DownloadImageButton
                               imageUrl={image.imageUrl}
                               generator="google-sem"
-                              modelName={image.type === 'google_ads' ? 'Imagen_4_GoogleAds' : 'Imagen_4_Original'}
+                              modelName={image.type === 'google_ads' ? 'gemini-2.5-flash-image-preview' : 'imagen-4.0-generate-preview-06-06'}
                               fileName={`google_sem_${image.type || 'image'}_${Math.ceil(image.index / 2)}`}
                               variant="ghost"
                               size="sm"
@@ -448,7 +448,7 @@ export default function GoogleSEMGenerator({ isAuthenticated }: GoogleSEMGenerat
                           <SaveImageButton
                             imageUrl={image.imageUrl}
                             generator="google-sem"
-                            modelName={image.type === 'google_ads' ? 'Imagen 4 Google Ads' : 'Imagen 4 Original'}
+                            modelName={image.type === 'google_ads' ? 'gemini-2.5-flash-image-preview' : 'imagen-4.0-generate-preview-06-06'}
                             promptUsed={image.prompt}
                             aspectRatio={selectedAspectRatio}
                             className="w-full text-blue-600 hover:text-blue-700"

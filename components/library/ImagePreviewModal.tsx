@@ -1,6 +1,8 @@
 'use client'
 
 import { X, Download, Share2, Edit3 } from 'lucide-react'
+import { navigateToEditor } from '@/lib/editorNavigation'
+import { useRouter } from 'next/navigation'
 
 interface AgentResult {
   style: string
@@ -32,6 +34,8 @@ interface ImagePreviewModalProps {
 }
 
 export default function ImagePreviewModal({ image, onClose }: ImagePreviewModalProps) {
+  const router = useRouter()
+  
   if (!image.url) {
     console.error('No image URL provided to modal')
     return null
@@ -78,11 +82,23 @@ export default function ImagePreviewModal({ image, onClose }: ImagePreviewModalP
     }
   }
 
-  // Edit handler (placeholder for now)
-  const handleEdit = () => {
-    // TODO: Implement edit functionality or redirect to editor
-    console.log('Edit functionality not implemented yet')
-    alert('Edit functionality coming soon!')
+  // Edit handler - navigate to editor with image
+  const handleEdit = async () => {
+    if (!image.url) {
+      alert('No valid image URL available for editing')
+      return
+    }
+    
+    try {
+      await navigateToEditor({
+        imageUrl: image.url,
+        imageName: image.title || 'Library Image',
+        router: router
+      })
+    } catch (error) {
+      console.error('Failed to navigate to editor:', error)
+      alert('Failed to open editor. Please try again.')
+    }
   }
 
   return (
@@ -240,7 +256,7 @@ export default function ImagePreviewModal({ image, onClose }: ImagePreviewModalP
                   </button>
                   <button
                     onClick={handleEdit}
-                    className="flex items-center justify-center gap-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2.5 rounded-lg font-medium transition-colors text-sm"
+                    className="flex items-center justify-center gap-1.5 bg-purple-100 hover:bg-purple-200 text-purple-700 px-3 py-2.5 rounded-lg font-medium transition-colors text-sm"
                   >
                     <Edit3 className="w-4 h-4" />
                     Edit

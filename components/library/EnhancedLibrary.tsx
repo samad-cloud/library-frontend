@@ -57,7 +57,7 @@ export default function EnhancedLibrary({ isPublic = false }: EnhancedLibraryPro
         <ImagePreviewModal
           image={{
             id: selectedImageForPreview.id,
-            url: selectedImageForPreview.storage_url || '/placeholder-image.png',
+            url: selectedImageForPreview.storage_url,
             title: selectedImageForPreview.title,
             alt: selectedImageForPreview.title,
             generatedDate: new Date(selectedImageForPreview.created_at).toLocaleDateString(),

@@ -21,6 +21,8 @@ interface OptimizedDatabaseImage {
   thumb_url: string | null
   storage_url: string
   tags: string[]
+  width: number | null
+  height: number | null
 }
 
 // Cache structure for page-based pagination
@@ -51,6 +53,7 @@ export default function OptimizedDatabaseImageGrid({ isPublic = false, onImageCl
   const [searchInput, setSearchInput] = useState('') // Local state for input
   const [selectedModel, setSelectedModel] = useState<string>('')
   const [selectedSource, setSelectedSource] = useState<string>('')
+  const [selectedAspectRatio, setSelectedAspectRatio] = useState<string>('')
   const [sortBy, setSortBy] = useState<'date' | 'model'>('date')
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
   
@@ -75,8 +78,8 @@ export default function OptimizedDatabaseImageGrid({ isPublic = false, onImageCl
 
   // Generate cache key for current filters and page
   const getCacheKey = useCallback((page: number) => {
-    return `${searchTerm}-${selectedModel}-${selectedSource}-${sortBy}-${sortOrder}-page-${page}`
-  }, [searchTerm, selectedModel, selectedSource, sortBy, sortOrder])
+    return `${searchTerm}-${selectedModel}-${selectedSource}-${selectedAspectRatio}-${sortBy}-${sortOrder}-page-${page}`
+  }, [searchTerm, selectedModel, selectedSource, selectedAspectRatio, sortBy, sortOrder])
 
   // Check if cache entry is valid
   const isCacheValid = useCallback((entry: CacheEntry) => {
@@ -121,7 +124,7 @@ export default function OptimizedDatabaseImageGrid({ isPublic = false, onImageCl
         // Single optimized query with count - minimal data transfer
         let query = supabase
           .from('images')
-          .select('id, title, description, generation_source, created_at, model_name, style_type, thumb_url, storage_url', { count: 'exact' })
+          .select('id, title, description, generation_source, created_at, model_name, style_type, thumb_url, storage_url, width, height', { count: 'exact' })
           .range(offset, offset + IMAGES_PER_PAGE - 1)
 
         // Apply filters efficiently
@@ -150,7 +153,7 @@ export default function OptimizedDatabaseImageGrid({ isPublic = false, onImageCl
         }
 
         // Transform to optimized format with minimal processing
-        const optimizedImages: OptimizedDatabaseImage[] = (data || []).map((row: any) => ({
+        let optimizedImages: OptimizedDatabaseImage[] = (data || []).map((row: any) => ({
           id: row.id,
           title: row.title || 'Untitled',
           description: row.description,
@@ -160,10 +163,22 @@ export default function OptimizedDatabaseImageGrid({ isPublic = false, onImageCl
           style_type: row.style_type,
           thumb_url: row.thumb_url,
           storage_url: row.storage_url,
-          tags: row.tags
+          tags: row.tags,
+          width: row.width,
+          height: row.height
         }))
 
-        const totalCount = count || 0
+        // Apply client-side aspect ratio filtering
+        if (selectedAspectRatio) {
+          optimizedImages = optimizedImages.filter(image => {
+            const imageAspectRatio = getAspectRatioCategory(image.width, image.height)
+            return imageAspectRatio === selectedAspectRatio
+          })
+        }
+
+        // Adjust count based on client-side filtering
+        const actualCount = selectedAspectRatio ? optimizedImages.length : (count || 0)
+        const totalCount = actualCount
         const totalPages = Math.ceil(totalCount / IMAGES_PER_PAGE)
 
         // Update cache efficiently
@@ -207,7 +222,7 @@ export default function OptimizedDatabaseImageGrid({ isPublic = false, onImageCl
     setRequestState({ isLoading: false })
     
     return fetchPromise
-  }, [searchTerm, selectedModel, selectedSource, sortBy, sortOrder, cache, isCacheValid, requestState.isLoading, requestState.promise])
+  }, [searchTerm, selectedModel, selectedSource, selectedAspectRatio, sortBy, sortOrder, cache, isCacheValid, requestState.isLoading, requestState.promise])
 
   // Handle search input changes with debouncing
   const handleSearchInputChange = useCallback((inputValue: string) => {
@@ -261,7 +276,7 @@ export default function OptimizedDatabaseImageGrid({ isPublic = false, onImageCl
     
     // Fetch with current search term
     fetchPage(1)
-  }, [selectedModel, selectedSource, sortBy, sortOrder]) // Removed fetchPage dependency
+  }, [selectedModel, selectedSource, selectedAspectRatio, sortBy, sortOrder]) // Removed fetchPage dependency
 
 
   // Cleanup
@@ -298,6 +313,33 @@ export default function OptimizedDatabaseImageGrid({ isPublic = false, onImageCl
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString()
+  }
+
+  const formatModelName = (modelName: string) => {
+    const modelDisplayMap: { [key: string]: string } = {
+      'imagen-4.0-generate-preview-06-06': 'Imagen 4',
+      'imagen-3.0-generate-002': 'Imagen 3',
+      'gemini-2.5-flash-image-preview': 'Gemini Flash',
+      'gpt-image-1': 'DALL-E'
+    }
+    return modelDisplayMap[modelName] || modelName
+  }
+
+  // Helper function to calculate aspect ratio category
+  const getAspectRatioCategory = (width: number | null, height: number | null): string | null => {
+    if (!width || !height) return null
+    
+    const ratio = width / height
+    const tolerance = 0.1 // Allow some tolerance for aspect ratio matching
+    
+    // Check against standard aspect ratios
+    if (Math.abs(ratio - 1) < tolerance) return '1:1'      // Square
+    if (Math.abs(ratio - 4/3) < tolerance) return '4:3'    // Traditional
+    if (Math.abs(ratio - 16/9) < tolerance) return '16:9'  // Widescreen
+    if (Math.abs(ratio - 9/16) < tolerance) return '9:16'  // Vertical/Mobile
+    if (Math.abs(ratio - 3/4) < tolerance) return '3:4'    // Portrait
+    
+    return null // Unknown aspect ratio
   }
 
   if (loading && images.length === 0) {
@@ -349,32 +391,48 @@ export default function OptimizedDatabaseImageGrid({ isPublic = false, onImageCl
             </div>
             
             <Select value={selectedModel || "all"} onValueChange={(value) => setSelectedModel(value === "all" ? "" : value)}>
-              <SelectTrigger className="w-40">
+              <SelectTrigger className="w-44">
                 <SelectValue placeholder="All Models" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Models</SelectItem>
+                <SelectItem value="imagen-4.0-generate-preview-06-06">Imagen 4</SelectItem>
+                <SelectItem value="imagen-3.0-generate-002">Imagen 3</SelectItem>
+                <SelectItem value="gemini-2.5-flash-image-preview">Gemini Flash</SelectItem>
                 <SelectItem value="gpt-image-1">DALL-E</SelectItem>
-                <SelectItem value="imagen-4.0-preview">Imagen</SelectItem>
-                <SelectItem value="gemini-2.5-flash-image-preview">Gemini</SelectItem>
               </SelectContent>
             </Select>
 
             <Select value={selectedSource || "all"} onValueChange={(value) => setSelectedSource(value === "all" ? "" : value)}>
-              <SelectTrigger className="w-40">
+              <SelectTrigger className="w-36">
                 <SelectValue placeholder="All Sources" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Sources</SelectItem>
-                <SelectItem value="calendar">Calendar</SelectItem>
                 <SelectItem value="manual">Manual</SelectItem>
+                <SelectItem value="editor">Editor</SelectItem>
+                <SelectItem value="calendar">Calendar</SelectItem>
                 <SelectItem value="api">API</SelectItem>
                 <SelectItem value="csv">CSV</SelectItem>
               </SelectContent>
             </Select>
 
-            <Select value={sortBy} onValueChange={(value: 'date' | 'model') => setSortBy(value)}>
+            <Select value={selectedAspectRatio || "all"} onValueChange={(value) => setSelectedAspectRatio(value === "all" ? "" : value)}>
               <SelectTrigger className="w-40">
+                <SelectValue placeholder="All Ratios" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Ratios</SelectItem>
+                <SelectItem value="1:1">Square (1:1)</SelectItem>
+                <SelectItem value="4:3">Standard (4:3)</SelectItem>
+                <SelectItem value="16:9">Widescreen (16:9)</SelectItem>
+                <SelectItem value="9:16">Portrait (9:16)</SelectItem>
+                <SelectItem value="3:4">Tall (3:4)</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={sortBy} onValueChange={(value: 'date' | 'model') => setSortBy(value)}>
+              <SelectTrigger className="w-36">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -454,18 +512,27 @@ export default function OptimizedDatabaseImageGrid({ isPublic = false, onImageCl
                 )}
                 
                 <div className="flex justify-between items-center text-xs text-gray-500">
-                  <span>{image.model_name}</span>
+                  <span className="truncate">{formatModelName(image.model_name)}</span>
                   <span>{formatDate(image.created_at)}</span>
                 </div>
 
-                <div className="flex gap-1 flex-wrap">
-                  <Badge variant="secondary" className="text-xs">
-                    {image.generation_source}
-                  </Badge>
-                  {image.style_type && (
-                    <Badge variant="outline" className="text-xs">
-                      {image.style_type}
+                <div className="flex justify-between items-end">
+                  <div className="flex gap-1 flex-wrap">
+                    <Badge variant="secondary" className="text-xs">
+                      {image.generation_source}
                     </Badge>
+                  </div>
+                  
+                  {/* Image dimensions and MP as tags on the right */}
+                  {(image.width && image.height) && (
+                    <div className="flex gap-1">
+                      <Badge variant="outline" className="text-xs text-gray-600">
+                        {image.width} × {image.height}
+                      </Badge>
+                      <Badge variant="outline" className="text-xs text-gray-600">
+                        {(image.width * image.height / 1000000).toFixed(1)}MP
+                      </Badge>
+                    </div>
                   )}
                 </div>
               </div>
