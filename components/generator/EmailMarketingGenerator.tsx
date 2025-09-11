@@ -55,7 +55,7 @@ export default function EmailMarketingGenerator({ isAuthenticated }: EmailMarket
     if (savedState) {
       setPrompt(savedState.prompt)
       setSelectedAspectRatio(savedState.selectedAspectRatio)
-      setNumberOfVariations(savedState.numberOfVariations || 1)
+      setNumberOfVariations(Math.min(savedState.numberOfVariations || 1, 3))
       setGeneratedContent(savedState.generatedContent)
       setGeneratedImages(savedState.generatedImages || [])
       setError(savedState.error)
@@ -245,16 +245,14 @@ export default function EmailMarketingGenerator({ isAuthenticated }: EmailMarket
                 <ImageIcon className="w-4 h-4" />
                 Number of Image Variations
               </label>
-              <Select value={numberOfVariations.toString()} onValueChange={(value) => setNumberOfVariations(parseInt(value))}>
+              <Select value={numberOfVariations.toString()} onValueChange={(value) => setNumberOfVariations(Math.min(parseInt(value), 3))}>
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select number of variations" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="1">1 variation (recommended)</SelectItem>
                   <SelectItem value="2">2 variations</SelectItem>
-                  <SelectItem value="3">3 variations</SelectItem>
-                  <SelectItem value="4">4 variations</SelectItem>
-                  <SelectItem value="5">5 variations</SelectItem>
+                  <SelectItem value="3">3 variations (maximum)</SelectItem>
                 </SelectContent>
               </Select>
               <p className="text-xs text-gray-500">
