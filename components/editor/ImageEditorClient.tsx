@@ -389,28 +389,53 @@ export default function ImageEditorClient({ isAuthenticated }: ImageEditorClient
       const data = await response.json()
       
       if (data.success) {
-        // Create a chat message from the new API response format
-        const assistantMessage: ChatMessage = {
-          id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-          role: 'assistant',
-          content: data.instructions || 'Image editing completed.',
-          imageUrl: data.editedImageUrl,
-          timestamp: data.timestamp || Date.now()
+        let assistantMessage: ChatMessage
+        
+        if (editorMode === 'create') {
+          // Handle create mode response
+          assistantMessage = {
+            id: data.message?.id || `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            role: 'assistant',
+            content: data.message?.content || 'Image created successfully.',
+            imageUrl: data.message?.imageUrl,
+            timestamp: data.message?.timestamp || Date.now()
+          }
+          
+          // Update latest image reference and session images if AI created an image
+          if (data.hasCreatedImage && data.message?.imageUrl) {
+            setLatestImageRef(data.message.imageUrl)
+            
+            // Add new created image to session images
+            setSessionImages(prev => {
+              const newImages = [...prev, data.message.imageUrl]
+              setCurrentImageIndex(newImages.length - 1) // Set to newest image
+              return newImages
+            })
+          }
+        } else {
+          // Handle edit mode response
+          assistantMessage = {
+            id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            role: 'assistant',
+            content: data.instructions || 'Image editing completed.',
+            imageUrl: data.editedImageUrl,
+            timestamp: data.timestamp || Date.now()
+          }
+          
+          // Update latest image reference and session images if AI returned an image
+          if (data.hasEditedImage && data.editedImageUrl) {
+            setLatestImageRef(data.editedImageUrl)
+            
+            // Add new generated image to session images
+            setSessionImages(prev => {
+              const newImages = [...prev, data.editedImageUrl]
+              setCurrentImageIndex(newImages.length - 1) // Set to newest image
+              return newImages
+            })
+          }
         }
         
         setMessages(prev => [...prev, assistantMessage])
-        
-        // Update latest image reference and session images if AI returned an image
-        if (data.hasEditedImage && data.editedImageUrl) {
-          setLatestImageRef(data.editedImageUrl)
-          
-          // Add new generated image to session images
-          setSessionImages(prev => {
-            const newImages = [...prev, data.editedImageUrl]
-            setCurrentImageIndex(newImages.length - 1) // Set to newest image
-            return newImages
-          })
-        }
       } else {
         throw new Error(data.error || `Failed to ${editorMode} image`)
       }
