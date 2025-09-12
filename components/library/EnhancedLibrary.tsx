@@ -52,31 +52,24 @@ export default function EnhancedLibrary({ isPublic = false }: EnhancedLibraryPro
         </div>
       )}
 
-      {/* Image Preview Modal - Optimized for Calendar Events */}
+      {/* Image Preview Modal - Generic for All Image Types */}
       {selectedImageForPreview && (
         <ImagePreviewModal
           image={{
             id: selectedImageForPreview.id,
             url: selectedImageForPreview.storage_url,
+            storage_url: selectedImageForPreview.storage_url,
             title: selectedImageForPreview.title,
-            alt: selectedImageForPreview.title,
+            alt: selectedImageForPreview.title || 'Generated image',
             generatedDate: new Date(selectedImageForPreview.created_at).toLocaleDateString(),
-            model: selectedImageForPreview.model_name || 'Calendar Event',
-            filename: 'calendar-event',
+            model: selectedImageForPreview.model_name || 'Unknown Model',
+            filename: selectedImageForPreview.title,
             tags: selectedImageForPreview.tags || [],
-            description: selectedImageForPreview.description || `Event from ${selectedImageForPreview.generation_metadata?.region || 'Unknown Region'}`,
-            agentResult: selectedImageForPreview.generation_metadata?.agentResult || {
-              style: 'calendar-event',
-              variant: {
-                prompt: `Calendar event: ${selectedImageForPreview.title}`,
-                Image_title: selectedImageForPreview.title,
-                Image_description: selectedImageForPreview.description || '',
-                prompt_success: selectedImageForPreview.generation_status === 'completed'
-              }
-            },
-            source: selectedImageForPreview.generation_source || 'calendar',
-            trigger: selectedImageForPreview.generation_trigger || 'calendar-event',
-            generationMetadata: selectedImageForPreview.generation_metadata || {}
+            description: selectedImageForPreview.description,
+            agentResult: selectedImageForPreview.generationMetadata?.agentResult,
+            source: selectedImageForPreview.generation_source,
+            trigger: selectedImageForPreview.generation_trigger,
+            generationMetadata: selectedImageForPreview.generationMetadata || {}
           }}
           onClose={() => setSelectedImageForPreview(null)}
         />
