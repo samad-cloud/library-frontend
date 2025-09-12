@@ -15,6 +15,8 @@ You must output in plain text, in this order:
 - Includes a subtle call-to-action
 - Avoids overly promotional language
 - Feels personal and inspiring
+- For the US, UK, India, and UAE, captions must be in English
+- For the rest of the world, captions must be in the local language (France - French, Germany - German, Italy - Italian, Netherlands - Dutch, Spain - Spanish, etc.)
 
 **Tags** – A strategic mix of 8–12 hashtags that include:
 
@@ -23,6 +25,8 @@ You must output in plain text, in this order:
 - Lifestyle hashtags (e.g., #familymoments, #memories, #homedecor)
 - Trending hashtags relevant to memory-keeping and home styling
 - Location-specific hashtags when relevant
+- For the US, UK, India, and UAE, all hashtags must be in English
+- For all other countries, hashtags must be a 50/50 mix of the local language and English, ensuring discoverability
 
 ## Creative Guidelines
 

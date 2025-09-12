@@ -54,7 +54,7 @@ async function generateSocialMediaCaption(sceneDescription: string): Promise<str
   
   const runner = new Runner()
   const captionAgent = new Agent({
-    model: 'gpt-4o',
+    model: 'gpt-5-nano',
     name: 'Social Media Caption Generator',
     instructions: socialMediaCaptionInstructions,
   })
@@ -72,7 +72,7 @@ async function enhanceSocialMediaPrompt(userPrompt: string): Promise<SocialMedia
   const runner = new Runner()
   const enhanceAgent = new Agent({
     name: 'Social Media Prompt Enhancer',
-    model: 'gpt-4o',
+    model: 'gpt-5-nano',
     instructions: socialMediaEnhanceInstructions,
     outputType: SocialMediaEnhancedPromptSchema
   })

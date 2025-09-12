@@ -18,6 +18,7 @@ import {
 import { navigateToEditor } from '@/lib/editorNavigation'
 import SaveImageButton from '@/components/shared/SaveImageButton'
 import DownloadImageButton from '@/components/shared/DownloadImageButton'
+import InstagramPostButton from '@/components/instagram/InstagramPostButton'
 
 // Helper function to get standard model name for database storage
 const getStandardModelName = (modelId: string): string => {
@@ -421,26 +422,31 @@ export default function SocialMediaGenerator({ isAuthenticated }: SocialMediaGen
                 </div>
                 
                 {hasImages && (
-                  <div className="space-y-2">
-                    <div className="flex gap-2">
+                  <div className="space-y-3">
+                    {/* Top row - View and Edit actions */}
+                    <div className="grid grid-cols-2 gap-2">
                       <Button 
                         variant="ghost" 
                         size="sm" 
-                        className="flex-1 text-pink-500 hover:text-pink-600"
+                        className="text-pink-500 hover:text-pink-600"
                         onClick={() => openImageInNewTab(modelResult.imageUrls[0])}
                       >
                         <Expand className="w-4 h-4 mr-2" />
-                        View Full Size
+                        View
                       </Button>
                       <Button 
                         variant="ghost" 
                         size="sm" 
-                        className="flex-1 text-green-600 hover:text-green-700"
+                        className="text-green-600 hover:text-green-700"
                         onClick={() => handleNavigateToEditor(modelResult.imageUrls[0], model.name)}
                       >
                         <Edit3 className="w-4 h-4 mr-2" />
-                        Edit Image
+                        Edit
                       </Button>
+                    </div>
+                    
+                    {/* Second row - Download and Save */}
+                    <div className="grid grid-cols-2 gap-2">
                       <DownloadImageButton
                         imageUrl={modelResult.imageUrls[0]}
                         generator="social-media"
@@ -448,20 +454,40 @@ export default function SocialMediaGenerator({ isAuthenticated }: SocialMediaGen
                         fileName={`social_media_${model.name.toLowerCase().replace(/\s+/g, '_')}`}
                         variant="ghost"
                         size="sm"
-                        className="flex-1 text-orange-500 hover:text-orange-600"
+                        className="text-orange-500 hover:text-orange-600"
                       >
                         Download
                       </DownloadImageButton>
+                      <SaveImageButton
+                        imageUrl={modelResult.imageUrls[0]}
+                        generator="social-media"
+                        modelName={getStandardModelName(model.id)}
+                        variant="ghost"
+                        size="sm"
+                        className="text-blue-500 hover:text-blue-600"
+                        disabled={!isAuthenticated}
+                      >
+                        Save
+                      </SaveImageButton>
                     </div>
-                    <SaveImageButton
+                    
+                    {/* Third row - Instagram Post (full width) */}
+                    <InstagramPostButton
                       imageUrl={modelResult.imageUrls[0]}
-                      generator="social-media"
+                      caption={instagramContent || `Check out this amazing ${model.name} generated image! #AI #GeneratedArt #Printerpix`}
                       modelName={getStandardModelName(model.id)}
-                      className="w-full text-blue-600 hover:text-blue-700"
-                      disabled={!isAuthenticated}
-                    >
-                      Save to Library
-                    </SaveImageButton>
+                      variant="outline"
+                      size="sm"
+                      className="w-full text-purple-600 border-purple-200 hover:bg-purple-50"
+                      onSuccess={(result) => {
+                        console.log('Successfully posted to Instagram:', result)
+                        // You could show a success toast here
+                      }}
+                      onError={(error) => {
+                        console.error('Failed to post to Instagram:', error)
+                        // You could show an error toast here
+                      }}
+                    />
                   </div>
                 )}
                 
