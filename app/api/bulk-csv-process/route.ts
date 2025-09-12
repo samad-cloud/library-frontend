@@ -177,8 +177,17 @@ export async function POST(request: NextRequest) {
     console.log('📝 Creating individual row jobs...')
     
     const rowJobs = cleanedCsvData.map((row, index) => {
-      // Generate trigger text from row data
-      const triggerText = `Country: ${row.country || 'NULL'}, Product: ${row.product_type || 'NULL'}, MPN: ${row.mpn || 'NULL'}, Product Size: ${row.size || 'NULL'}`.trim()
+      // Generate trigger text from row data (new template format) - only include fields with values
+      const triggerParts = []
+      if (row.Product && row.Product.toString().trim()) triggerParts.push(`Product: ${row.Product.toString().trim()}`)
+      if (row.Variant && row.Variant.toString().trim()) triggerParts.push(`Variant: ${row.Variant.toString().trim()}`)
+      if (row.Size && row.Size.toString().trim()) triggerParts.push(`Size: ${row.Size.toString().trim()}`)
+      if (row.Region && row.Region.toString().trim()) triggerParts.push(`Region: ${row.Region.toString().trim()}`)
+      if (row.Theme && row.Theme.toString().trim()) triggerParts.push(`Theme: ${row.Theme.toString().trim()}`)
+      if (row['additional comments'] && row['additional comments'].toString().trim()) {
+        triggerParts.push(`Additional: ${row['additional comments'].toString().trim()}`)
+      }
+      const triggerText = triggerParts.join(', ')
       
       return {
         batch_id: generatedJobId,
