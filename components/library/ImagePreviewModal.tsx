@@ -3,6 +3,7 @@
 import { X, Download, Share2, Edit3 } from 'lucide-react'
 import { navigateToEditor } from '@/lib/editorNavigation'
 import { useRouter } from 'next/navigation'
+import InstagramPostButton from '@/components/instagram/InstagramPostButton'
 
 interface AgentResult {
   style: string
@@ -28,6 +29,7 @@ interface ImagePreviewModalProps {
     agentResult?: AgentResult
     source?: string
     trigger?: string
+    storage_url?: string
     generationMetadata?: any
   }
   onClose: () => void
@@ -236,31 +238,47 @@ export default function ImagePreviewModal({ image, onClose }: ImagePreviewModalP
               {/* Action Buttons */}
               <div className="border-t border-gray-200 pt-4 mt-6">
                 <h4 className="text-sm font-medium text-gray-800 mb-3">Actions</h4>
-                <div className="grid grid-cols-3 gap-2">
-                  {/* Primary CTA - Download */}
-                  <button
-                    onClick={handleDownload}
-                    className="flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white px-3 py-2.5 rounded-lg font-medium transition-colors text-sm"
-                  >
-                    <Download className="w-4 h-4" />
-                    Download
-                  </button>
+                <div className="space-y-2">
+                  {/* First row - Download and Edit */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={handleDownload}
+                      className="flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white px-3 py-2.5 rounded-lg font-medium transition-colors text-sm"
+                    >
+                      <Download className="w-4 h-4" />
+                      Download
+                    </button>
+                    <button
+                      onClick={handleEdit}
+                      className="flex items-center justify-center gap-1.5 bg-purple-100 hover:bg-purple-200 text-purple-700 px-3 py-2.5 rounded-lg font-medium transition-colors text-sm"
+                    >
+                      <Edit3 className="w-4 h-4" />
+                      Edit
+                    </button>
+                  </div>
 
-                  {/* Secondary CTAs */}
-                  <button
-                    onClick={handleShare}
-                    className="flex items-center justify-center gap-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2.5 rounded-lg font-medium transition-colors text-sm"
-                  >
-                    <Share2 className="w-4 h-4" />
-                    Share
-                  </button>
-                  <button
-                    onClick={handleEdit}
-                    className="flex items-center justify-center gap-1.5 bg-purple-100 hover:bg-purple-200 text-purple-700 px-3 py-2.5 rounded-lg font-medium transition-colors text-sm"
-                  >
-                    <Edit3 className="w-4 h-4" />
-                    Edit
-                  </button>
+                  {/* Second row - Share and Instagram */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={handleShare}
+                      className="flex items-center justify-center gap-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2.5 rounded-lg font-medium transition-colors text-sm"
+                    >
+                      <Share2 className="w-4 h-4" />
+                      Share
+                    </button>
+                    {/* Instagram Post Button */}
+                    <InstagramPostButton
+                      imageUrl={image.storage_url || image.url}
+                      caption={
+                        image.generationMetadata?.caption || 
+                        `Check out this amazing generated image! ${image.title} #AI #GeneratedArt #Printerpix`
+                      }
+                      modelName={image.model || 'unknown'}
+                      variant="outline"
+                      size="sm"
+                      className="text-purple-600 border-purple-200 hover:bg-purple-50 h-auto py-2.5"
+                    />
+                  </div>
                 </div>
               </div>
             </div>

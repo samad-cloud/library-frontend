@@ -23,6 +23,7 @@ interface OptimizedDatabaseImage {
   tags: string[]
   width: number | null
   height: number | null
+  generation_metadata?: any // For accessing saved captions and other metadata
 }
 
 // Cache structure for page-based pagination
@@ -124,7 +125,7 @@ export default function OptimizedDatabaseImageGrid({ isPublic = false, onImageCl
         // Single optimized query with count - minimal data transfer
         let query = supabase
           .from('images')
-          .select('id, title, description, generation_source, created_at, model_name, style_type, thumb_url, storage_url, width, height', { count: 'exact' })
+          .select('id, title, description, generation_source, created_at, model_name, style_type, thumb_url, storage_url, width, height, generation_metadata', { count: 'exact' })
           .range(offset, offset + IMAGES_PER_PAGE - 1)
 
         // Apply filters efficiently
@@ -165,7 +166,8 @@ export default function OptimizedDatabaseImageGrid({ isPublic = false, onImageCl
           storage_url: row.storage_url,
           tags: row.tags,
           width: row.width,
-          height: row.height
+          height: row.height,
+          generation_metadata: row.generation_metadata
         }))
 
         // Apply client-side aspect ratio filtering
@@ -293,15 +295,17 @@ export default function OptimizedDatabaseImageGrid({ isPublic = false, onImageCl
       // Transform the optimized image to match the expected format
       const transformedImage = {
         id: image.id,
+        url: image.storage_url || '',
         storage_url: image.storage_url,
         title: image.title,
+        alt: image.title || 'Generated image',
         description: image.description,
         tags: image.tags,
-        model_name: image.model_name,
-        generation_source: image.generation_source,
-        created_at: image.created_at,
-        generation_status: 'completed',
-        generation_metadata: {
+        model: image.model_name,
+        filename: image.title,
+        generatedDate: image.created_at,
+        source: image.generation_source,
+        generationMetadata: image.generation_metadata || {
           style_type: image.style_type
         }
       }

@@ -14,6 +14,7 @@ export interface SaveImageOptions {
   aspectRatio?: string
   isEditedImage?: boolean // Flag to indicate this is an edited image from the editor
   originalPrompt?: string // Original prompt if this was derived from another image
+  captionData?: string // Social media caption for Instagram posting from library
 }
 
 export interface SaveImageResult {
@@ -54,6 +55,55 @@ async function urlToBuffer(url: string): Promise<{ buffer: Buffer; contentType: 
   const contentType = response.headers.get('content-type') || 'image/png'
   
   return { buffer, contentType }
+}
+
+/**
+ * Extracts image dimensions from a buffer
+ */
+async function getImageDimensions(buffer: Buffer): Promise<{ width: number; height: number } | null> {
+  try {
+    // We'll use a simple approach to extract dimensions from common image formats
+    // For PNG files
+    if (buffer.subarray(0, 8).toString('hex') === '89504e470d0a1a0a') {
+      // PNG signature found, read IHDR chunk
+      const width = buffer.readUInt32BE(16)
+      const height = buffer.readUInt32BE(20)
+      return { width, height }
+    }
+    
+    // For JPEG files
+    if (buffer.subarray(0, 2).toString('hex') === 'ffd8') {
+      // JPEG signature found, scan for SOF marker
+      let offset = 2
+      while (offset < buffer.length - 8) {
+        const marker = buffer.readUInt16BE(offset)
+        if (marker >= 0xffc0 && marker <= 0xffc3) {
+          // SOF marker found
+          const height = buffer.readUInt16BE(offset + 5)
+          const width = buffer.readUInt16BE(offset + 7)
+          return { width, height }
+        }
+        const length = buffer.readUInt16BE(offset + 2)
+        offset += 2 + length
+      }
+    }
+    
+    // For WebP files (basic support)
+    if (buffer.subarray(0, 4).toString() === 'RIFF' && buffer.subarray(8, 12).toString() === 'WEBP') {
+      // WebP signature found
+      if (buffer.subarray(12, 16).toString() === 'VP8 ') {
+        // VP8 format
+        const width = buffer.readUInt16LE(26) & 0x3fff
+        const height = buffer.readUInt16LE(28) & 0x3fff
+        return { width, height }
+      }
+    }
+    
+    return null
+  } catch (error) {
+    console.warn('Failed to extract image dimensions:', error)
+    return null
+  }
 }
 
 /**
@@ -122,6 +172,9 @@ export async function saveGeneratedImage(options: SaveImageOptions): Promise<Sav
       .from('image-main')
       .getPublicUrl(data.path)
 
+    // Extract image dimensions
+    const dimensions = await getImageDimensions(buffer)
+
     // Save metadata to database using existing images table
     try {
       const { error: dbError } = await supabase
@@ -140,10 +193,13 @@ export async function saveGeneratedImage(options: SaveImageOptions): Promise<Sav
             file_size: buffer.length,
             mime_type: contentType,
             is_edited_image: options.isEditedImage || false,
-            original_prompt: options.originalPrompt || null
+            original_prompt: options.originalPrompt || null,
+            caption: options.captionData || null // Save caption for Instagram posting from library
           },
           format: contentType.split('/')[1] || 'png',
           bytes: buffer.length,
+          width: dimensions?.width || null,
+          height: dimensions?.height || null,
           tags: options.generator ? [options.generator] : []
         })
 

@@ -466,6 +466,7 @@ export default function SocialMediaGenerator({ isAuthenticated }: SocialMediaGen
                         size="sm"
                         className="text-blue-500 hover:text-blue-600"
                         disabled={!isAuthenticated}
+                        captionData={instagramContent} // Pass caption for Instagram posting from library
                       >
                         Save
                       </SaveImageButton>

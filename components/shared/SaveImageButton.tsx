@@ -18,6 +18,7 @@ interface SaveImageButtonProps {
   disabled?: boolean
   promptUsed?: string
   aspectRatio?: string
+  captionData?: string // Social media caption for Instagram posting from library
 }
 
 export default function SaveImageButton({
@@ -31,7 +32,8 @@ export default function SaveImageButton({
   children,
   disabled = false,
   promptUsed,
-  aspectRatio
+  aspectRatio,
+  captionData
 }: SaveImageButtonProps) {
   const [isSaving, setIsSaving] = useState(false)
   const [saveStatus, setSaveStatus] = useState<'idle' | 'success' | 'error'>('idle')
@@ -50,7 +52,8 @@ export default function SaveImageButton({
         generator,
         modelName,
         promptUsed,
-        aspectRatio
+        aspectRatio,
+        captionData
       })
 
       if (result.success) {
